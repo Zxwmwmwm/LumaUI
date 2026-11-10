@@ -19,5 +19,5 @@ PY
 python3 - <<'PY'
 from zipfile import ZipFile, ZIP_DEFLATED
 with ZipFile('artifacts/LumaUI.levipack','w',ZIP_DEFLATED) as z:
- z.write('manifest.json','manifest.json');z.write('artifacts/libLumaUI.so','libLumaUI.so')
+ z.write('manifest.json','manifest.json');z.write('artifacts/libLumaUI.so','libLumaUI.so');z.write('LICENSE','LICENSE')
 PY

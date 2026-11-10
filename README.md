@@ -34,4 +34,4 @@ The build produces `artifacts/libLumaUI.so` and `artifacts/LumaUI.levipack`. Thi
 
 ## License
 
-No open-source license has been selected. A public repository alone does not grant reuse rights.
+LumaUI is licensed under the [MIT License](LICENSE). Copyright © 2026 Zxwmwmwm.
