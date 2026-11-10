@@ -10,8 +10,6 @@ A customizable GUI-only native mod for LeviLauncher on Android. **Author: Zxwmwm
 - In **Appearance**, choose **Accent**, **Panel**, or **Effects** to customize each color separately using presets or RGB sliders. Opacity is adjustable too. Very light panel colors may reduce text contrast.
 - Settings persist in Android app preferences. No gameplay-changing features or game hooks are included. The glass look is translucent, not a real-time blur.
 
-Version remains **1.0.0** at the author's request. The manifest retains `"hf": true` for the earlier floating-button fix; that field is informational and may not be displayed by the launcher.
-
 ## Install
 
 1. Download [`LumaUI.levipack`](artifacts/LumaUI.levipack), import it in LeviLauncher's mod manager, and enable it.
