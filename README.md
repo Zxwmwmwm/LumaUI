@@ -12,7 +12,7 @@ A customizable GUI-only native mod for LeviLauncher on Android
 
 ## Install
 
-1. Download [`LumaUI.levipack`](artifacts/LumaUI.levipack), import it in LeviLauncher's mod manager, and enable it.
+1. Download `LumaUI.levipack` from the [latest GitHub release](https://github.com/Zxwmwmwm/LumaUI/releases/latest), import it in LeviLauncher's mod manager, and enable it.
 2. Start Minecraft and tap the floating **L** button. Drag it to reposition it.
 3. Tap the X or outside the menu to close it. With the menu closed, touches outside the button should pass through to the game.
 
