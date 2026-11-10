@@ -1,6 +1,6 @@
 # LumaUI
 
-A customizable GUI-only native mod for LeviLauncher on Android. **Author: Zxwmwmwm.**
+A customizable GUI-only native mod for LeviLauncher on Android
 
 ## Features
 
