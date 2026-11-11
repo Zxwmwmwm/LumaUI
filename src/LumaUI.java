@@ -8,6 +8,9 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.RadialGradient;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -85,39 +88,80 @@ public final class LumaUI {
   }
   private static final class Bubble extends View {
     final Paint p=new Paint(3); Bubble(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-    protected void onDraw(Canvas c){float w=getWidth(),h=getHeight(); p.setColor(0xff171925);p.setShadowLayer(w*.16f,0,0,0x997e76ff);c.drawCircle(w/2,h/2,w*.43f,p);p.clearShadowLayer();p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(w*.025f);p.setColor(0xff9f97ff);c.drawCircle(w/2,h/2,w*.43f,p);p.setStyle(Paint.Style.FILL);p.setColor(-1);p.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));p.setTextSize(w*.40f);p.setTextAlign(Paint.Align.CENTER);c.drawText("L",w/2,h*.65f,p);}
+    protected void onDraw(Canvas c){float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;SharedPreferences prefs=getContext().getSharedPreferences("lumaui_settings",0);
+      int ac=prefs.getInt("accentColor",Color.rgb((int)(prefs.getFloat("red",.57f)*255),(int)(prefs.getFloat("green",.50f)*255),(int)(prefs.getFloat("blue",1f)*255)));
+      p.setStyle(Paint.Style.FILL);p.setColor(0xff171925);p.setShadowLayer(w*.16f,0,0,(ac&0x00ffffff)|0x88000000);c.drawCircle(w/2,h/2,w*.43f,p);p.clearShadowLayer();
+      p.setShader(new RadialGradient(w*.34f,h*.24f,w*.8f,new int[]{(ac&0x00ffffff)|0x88000000,0x11171925,0x00171925},null,Shader.TileMode.CLAMP));c.drawCircle(w/2,h/2,w*.43f,p);p.setShader(null);
+      p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(w*.025f);p.setColor((ac&0x00ffffff)|0xdd000000);c.drawCircle(w/2,h/2,w*.43f,p);p.setStyle(Paint.Style.FILL);p.setColor(-1);p.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));p.setTextSize(w*.40f);p.setTextAlign(Paint.Align.CENTER);c.drawText("L",w/2,h*.65f,p);}
   }
   private static final class Panel extends View {
     final Paint p=new Paint(3); final SharedPreferences prefs;
-    float open=0, tabMotion=0; boolean shown=false; int tab=0, active=-1, motionMode=1, colorSlot=0;
-    final int[] palette=new int[3]; float phaseTime=0;
+    float open=0, tabMotion=0; boolean shown=false, portalTransition=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2;
+    final int[] palette=new int[3]; float phaseTime=0, lightX=.82f, lightY=.12f, targetLightX=.82f, targetLightY=.12f;
     float[] target=new float[5], shownValue=new float[5];
-    float x,y,w,h,side,body,unit; long last;
+    float x,y,w,h,side,body,unit,anchorX,anchorY,anchorWidth,anchorHeight; boolean haveAnchor; long last;
     Panel(Context c){ super(c); setClickable(true); setLayerType(View.LAYER_TYPE_SOFTWARE,null); prefs=c.getSharedPreferences("lumaui_settings",0);
       palette[0]=prefs.getInt("accentColor",Color.rgb((int)(prefs.getFloat("red",.57f)*255),(int)(prefs.getFloat("green",.50f)*255),(int)(prefs.getFloat("blue",1f)*255)));
       palette[1]=prefs.getInt("panelColor",0xff12141f); palette[2]=prefs.getInt("effectColor",0xff9280ff);
       motionMode=Math.max(0,Math.min(2,prefs.getInt("motionMode",prefs.getBoolean("bubbles",true)?1:0)));
+      portalTransition=prefs.getBoolean("portalTransition",true); depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));
       loadColor(0);target[3]=prefs.getFloat("opacity",.92f);target[4]=prefs.getFloat("motion",.5f);System.arraycopy(target,0,shownValue,0,5);
     }
-    void open(){shown=true;if(bubble!=null)bubble.setVisibility(View.GONE);setVisibility(View.VISIBLE);invalidate();}
+    void open(){shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.GONE);}setVisibility(View.VISIBLE);invalidate();}
     void close(){shown=false;active=-1;invalidate();}
     void loadColor(int slot){colorSlot=slot;int color=palette[slot];target[0]=Color.red(color)/255f;target[1]=Color.green(color)/255f;target[2]=Color.blue(color)/255f;}
     void recordColor(){palette[colorSlot]=Color.rgb((int)(target[0]*255),(int)(target[1]*255),(int)(target[2]*255));}
-    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).apply();}
+    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",portalTransition).putInt("depthMode",depthMode).apply();if(bubble!=null)bubble.invalidate();}
     int accent(){return colorSlot==0?Color.rgb((int)(shownValue[0]*255),(int)(shownValue[1]*255),(int)(shownValue[2]*255)):palette[0];}
     int alpha(int color,int a){return (color&0xffffff)|(a<<24);}
     void round(Canvas c,float l,float t,float r,float b,float radius,int color){p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawRoundRect(new RectF(l,t,r,b),radius,radius,p);}
     void text(Canvas c,String s,float a,float b,float size,int col,boolean bold){p.setColor(col);p.setStyle(Paint.Style.FILL);p.setTypeface(android.graphics.Typeface.create(bold?"sans-serif-medium":"sans-serif",0));p.setTextAlign(Paint.Align.LEFT);p.setTextSize(size);c.drawText(s,a,b,p);}
+    void depthShadow(Canvas c,int ac){
+      if(depthMode==0)return;
+      int layers=depthMode==2?5:2;
+      for(int i=layers;i>0;i--){float offset=i*(depthMode==2?1.6f:1.1f)*unit;
+        round(c,x+offset*.35f,y+offset,x+w-offset*.35f,y+h+offset,20*unit,alpha(0xff03040a,(int)((26+i*6)*open)));}
+      p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xff0a0a18,(int)(110*open)));
+      p.setShadowLayer((depthMode==2?22:11)*unit,0,(depthMode==2?8:4)*unit,alpha(ac,(int)((depthMode==2?48:24)*open)));
+      c.drawRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,p);p.clearShadowLayer();
+    }
+    void depthLight(Canvas c,int ac){
+      if(depthMode==0)return;
+      c.save();Path clip=new Path();clip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(clip);
+      float strength=depthMode==2?1f:.55f;
+      float drift=motionMode==0?0:(float)Math.sin(phaseTime*.55f)*18*unit;
+      p.setStyle(Paint.Style.FILL);
+      p.setShader(new RadialGradient(x+w*lightX+drift,y+h*lightY,Math.max(1,w*.72f),
+        new int[]{alpha(ac,(int)(48*strength*open)),alpha(ac,(int)(12*strength*open)),0x00000000},null,Shader.TileMode.CLAMP));
+      c.drawRect(x,y,x+w,y+h,p);p.setShader(null);
+      p.setShader(new LinearGradient(x,y,x,y+h*.30f,alpha(0xffffffff,(int)(18*strength*open)),0x00ffffff,Shader.TileMode.CLAMP));
+      c.drawRoundRect(new RectF(x+unit,y+unit,x+w-unit,y+Math.min(h*.35f,90*unit)),19*unit,19*unit,p);p.setShader(null);
+      c.restore();
+    }
     protected void onDraw(Canvas c){
       long now=android.os.SystemClock.uptimeMillis();float dt=last==0?.016f:Math.min(.05f,(now-last)/1000f);last=now;
       phaseTime+=dt*(.35f+target[4]*1.3f);float speed=8f+target[4]*10f;float k=1f-(float)Math.exp(-dt*speed);open+=((shown?1:0)-open)*k;tabMotion+=(tab-tabMotion)*k;
       boolean anim=Math.abs((shown?1:0)-open)>.002f||Math.abs(tab-tabMotion)>.002f;
+      lightX+=(targetLightX-lightX)*k;lightY+=(targetLightY-lightY)*k;
+      anim|=depthMode!=0&&(Math.abs(targetLightX-lightX)>.002f||Math.abs(targetLightY-lightY)>.002f);
       for(int i=0;i<5;i++){shownValue[i]+=(target[i]-shownValue[i])*k;anim|=Math.abs(target[i]-shownValue[i])>.002f;}
       if(!shown&&open<.01f){open=0;setVisibility(View.GONE);if(bubble!=null)bubble.setVisibility(View.VISIBLE);return;}
       float W=getWidth(),H=getHeight(),density=getResources().getDisplayMetrics().density; unit=Math.min(density, Math.min(W/700f,H/420f)); if(unit<.55f)unit=.55f;
       w=Math.min(W-24*unit,760*unit);h=Math.min(H-24*unit,440*unit);x=(W-w)/2;y=(H-h)/2;side=Math.min(185*unit,w*.29f);body=x+side;int ac=accent();
-      c.drawColor(Color.argb((int)(125*open),0,0,0));c.save();c.scale(.94f+.06f*open,.94f+.06f*open,W/2,H/2);
+      c.drawColor(Color.argb((int)(125*open),0,0,0));
+      float originX=haveAnchor?anchorX:W/2,originY=haveAnchor?anchorY:H/2;
+      if(portalTransition && open<.995f){
+        float flash=4f*open*(1f-open);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((1.2f+2f*flash)*unit);
+        p.setColor(alpha(ac,(int)(145*flash)));c.drawCircle(originX,originY,(20+45*open)*unit,p);
+        p.setStrokeWidth(unit);p.setColor(alpha(0xffffffff,(int)(60*flash)));c.drawCircle(originX,originY,(14+25*open)*unit,p);p.setStyle(Paint.Style.FILL);
+      }
+      c.save();
+      if(portalTransition){float initial=TransitionMath.startScale(anchorWidth,anchorHeight,w,h),scale=TransitionMath.scale(initial,open);
+        c.translate(TransitionMath.offset(originX,W/2,open),TransitionMath.offset(originY,H/2,open));c.scale(scale,scale,W/2,H/2);}
+      else c.scale(.94f+.06f*open,.94f+.06f*open,W/2,H/2);
+      depthShadow(c,ac);
       int bg=(int)((.68f+.31f*shownValue[3])*255*open);round(c,x,y,x+w,y+h,20*unit,Color.argb(bg,Color.red(palette[1]),Color.green(palette[1]),Color.blue(palette[1])));
+      depthLight(c,ac);
       if(motionMode!=0){
         c.save(); Path clip=new Path(); clip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW); c.clipPath(clip);
         int effect=palette[2]; float seconds=phaseTime;
@@ -138,8 +182,13 @@ public final class LumaUI {
             float pulse=.45f+.55f*(float)(.5+.5*Math.sin(seconds*1.5+i*2.1));
             p.setColor(alpha(i%3==0?effect:0xffe7e8ff,(int)(70*pulse*open)));p.setStyle(Paint.Style.FILL);c.drawCircle(sx,sy,(i%5==0?1.6f:.8f)*unit,p);
           }
+          for(int i=0;i<2;i++){float t=(seconds*.09f+i*.53f)%1f;float sx=body+(w-side)*(1f-t),sy=y+(.14f+.32f*i)*h+t*25*unit;
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((i==0?1.3f:.8f)*unit);p.setColor(alpha(effect,(int)(65*Math.sin(Math.PI*t)*open)));
+            c.drawLine(sx,sy,sx-26*unit,sy+9*unit,p);p.setStyle(Paint.Style.FILL);}
           float cx=x+w-110*unit,cy=y+h-85*unit;
           c.save(); c.translate(cx,cy); c.rotate(-18);
+          p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(0,0,68*unit,new int[]{alpha(effect,(int)(48*open)),alpha(effect,(int)(14*open)),0x00000000},null,Shader.TileMode.CLAMP));
+          c.drawCircle(0,0,68*unit,p);p.setShader(null);
           for(int i=4;i>=0;i--){float r=(30+i*6)*unit;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((i==0?3:1.2f)*unit);p.setColor(alpha(effect,(int)((28-i*4)*open)));c.drawOval(new RectF(-r,-r*.34f,r,r*.34f),p);}
           p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xff050610,(int)(220*open)));c.drawCircle(0,0,22*unit,p);
           p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2*unit);p.setColor(alpha(effect,(int)(90*open)));c.drawCircle(0,0,22*unit,p);
@@ -149,14 +198,18 @@ public final class LumaUI {
         p.setStyle(Paint.Style.FILL);c.restore();
       }
       p.setColor(alpha(ac,(int)(65*open)));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);c.drawRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,p);p.setStyle(Paint.Style.FILL);
+      if(depthMode!=0){round(c,x+8*unit,y+8*unit,body-8*unit,y+h-8*unit,15*unit,alpha(0xff0b0c14,(int)((depthMode==2?62:32)*open)));
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(0xffffffff,(int)((depthMode==2?28:14)*open)));c.drawRoundRect(new RectF(x+2*unit,y+2*unit,x+w-2*unit,y+h-2*unit),18*unit,18*unit,p);p.setStyle(Paint.Style.FILL);}
       round(c,x+16*unit,y+18*unit,x+48*unit,y+50*unit,10*unit,alpha(ac,(int)(210*open)));text(c,"L",x+26*unit,y+41*unit,20*unit,alpha(Color.WHITE,(int)(255*open)),true);
       text(c,"LumaUI",x+57*unit,y+34*unit,19*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"YOUR SPACE",x+57*unit,y+48*unit,8*unit,alpha(0xffa7a8bd,(int)(220*open)),true);
       float menuY=y+83*unit; round(c,x+12*unit,menuY+tabMotion*44*unit,x+side-12*unit,menuY+37*unit+tabMotion*44*unit,10*unit,alpha(ac,(int)(45*open)));
+      round(c,x+12*unit,menuY+tabMotion*44*unit+8*unit,x+15*unit,menuY+tabMotion*44*unit+29*unit,2*unit,alpha(ac,(int)(220*open)));
       String[] tabs={"Appearance","Motion","About"}; for(int i=0;i<3;i++){int co=i==tab?0xfff5f4ff:0xff979aaa;text(c,tabs[i],x+24*unit,menuY+(i*44+24)*unit,13*unit,alpha(co,(int)(255*open)),i==tab);}
-      text(c,"GUI ONLY  •  v1.0.0",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
+      text(c,"GUI ONLY  •  v1.0.1",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
       p.setColor(alpha(0xff6f7080,(int)(65*open)));p.setStrokeWidth(unit);c.drawLine(body,y+18*unit,body,y+h-18*unit,p);
       text(c,tab==0?"Appearance":tab==1?"Motion":"About",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
-      text(c,"×",x+w-36*unit,y+38*unit,25*unit,alpha(0xffb9bbcb,(int)(255*open)),false);
+      round(c,x+w-48*unit,y+14*unit,x+w-15*unit,y+47*unit,10*unit,alpha(0xff777b94,(int)(38*open)));
+      text(c,"×",x+w-36*unit,y+38*unit,25*unit,alpha(0xffe5e6f2,(int)(255*open)),false);
       float transition=1f-Math.min(.75f,Math.abs(tab-tabMotion)*.65f);
       c.saveLayerAlpha(body,y,x+w,y+h,(int)(255*transition),Canvas.ALL_SAVE_FLAG);
       c.translate((tabMotion-tab)*8*unit,0);
@@ -172,13 +225,24 @@ public final class LumaUI {
         float segLeft=body+24*unit,segW=(x+w-32*unit-segLeft)/3f;String[] modes={"Off","Stretch","Space"};
         for(int i=0;i<3;i++){float sl=segLeft+i*segW;round(c,sl,y+236*unit,sl+segW-5*unit,y+268*unit,9*unit,alpha(i==motionMode?ac:0xff505365,(int)((i==motionMode?100:50)*open)));text(c,modes[i],sl+9*unit,y+256*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),i==motionMode);}
         text(c,"Space adds stars and an orbiting black hole.",body+24*unit,y+292*unit,10*unit,alpha(0xffa4a7bb,(int)(255*open)),false);
+        text(c,"Button-to-menu transition",body+24*unit,y+320*unit,11*unit,alpha(0xffe4e5f0,(int)(255*open)),true);
+        float toggleRight=x+w-32*unit;round(c,toggleRight-56*unit,y+301*unit,toggleRight,y+328*unit,9*unit,alpha(portalTransition?ac:0xff505365,(int)((portalTransition?125:70)*open)));
+        text(c,portalTransition?"ON":"OFF",toggleRight-43*unit,y+319*unit,10*unit,alpha(Color.WHITE,(int)(255*open)),true);
+        text(c,"Interface depth",body+24*unit,y+352*unit,11*unit,alpha(0xffe4e5f0,(int)(255*open)),true);
+        float depthLeft=body+24*unit,depthWidth=(x+w-32*unit-depthLeft)/3f;String[] depths={"Flat","Soft","Deep"};
+        for(int i=0;i<3;i++){float sl=depthLeft+i*depthWidth;round(c,sl,y+361*unit,sl+depthWidth-5*unit,y+390*unit,9*unit,alpha(i==depthMode?ac:0xff505365,(int)((i==depthMode?100:50)*open)));text(c,depths[i],sl+9*unit,y+380*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),i==depthMode);}
       } else {text(c,"A little more you.",body+24*unit,y+92*unit,16*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"A smooth, customizable interface.",body+24*unit,y+117*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);text(c,"No gameplay features are included.",body+24*unit,y+138*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);}
       c.restore(); c.restore();if(anim)postInvalidateOnAnimation();else if(shown&&motionMode!=0)postInvalidateDelayed(33);else last=0;
     }
-    void slider(Canvas c,int i,float yy,float fade){String[] names={"Red","Green","Blue","Panel opacity","Animation speed"};float left=body+24*unit,right=x+w-32*unit; text(c,names[i],left,yy,11*unit,alpha(0xffe4e5f0,(int)(255*fade)),true);text(c,""+Math.round(target[i]*100)+"%",right-30*unit,yy,10*unit,alpha(0xffa4a7bb,(int)(255*fade)),false);float sy=yy+13*unit;round(c,left,sy,right,sy+4*unit,3*unit,alpha(0xff525567,(int)(150*fade)));round(c,left,sy,left+(right-left)*shownValue[i],sy+4*unit,3*unit,alpha(accent(),(int)(255*fade)));p.setColor(alpha(0xffffffff,(int)(255*fade)));c.drawCircle(left+(right-left)*shownValue[i],sy+2*unit,6*unit,p);}
+    void slider(Canvas c,int i,float yy,float fade){String[] names={"Red","Green","Blue","Panel opacity","Animation speed"};float left=body+24*unit,right=x+w-32*unit; text(c,names[i],left,yy,11*unit,alpha(0xffe4e5f0,(int)(255*fade)),true);text(c,""+Math.round(target[i]*100)+"%",right-30*unit,yy,10*unit,alpha(0xffa4a7bb,(int)(255*fade)),false);float sy=yy+13*unit;round(c,left,sy,right,sy+4*unit,3*unit,alpha(0xff525567,(int)(150*fade)));round(c,left,sy,left+(right-left)*shownValue[i],sy+4*unit,3*unit,alpha(accent(),(int)(255*fade)));p.setColor(alpha(0xffffffff,(int)(255*fade)));if(depthMode!=0)p.setShadowLayer(7*unit,0,0,alpha(accent(),(int)(100*fade)));c.drawCircle(left+(right-left)*shownValue[i],sy+2*unit,6*unit,p);p.clearShadowLayer();}
     public boolean onTouchEvent(MotionEvent e){float px=e.getX(),py=e.getY();int act=e.getActionMasked();float left=body+24*unit,right=x+w-32*unit;
+      if(open<.96f||!shown)return true;
+      if((act==MotionEvent.ACTION_DOWN||act==MotionEvent.ACTION_MOVE)&&px>=x&&px<=x+w&&py>=y&&py<=y+h){targetLightX=Math.max(.1f,Math.min(.9f,(px-x)/w));targetLightY=Math.max(.05f,Math.min(.8f,(py-y)/h));if(depthMode!=0)invalidate();}
+      if(act==MotionEvent.ACTION_UP||act==MotionEvent.ACTION_CANCEL){targetLightX=.82f;targetLightY=.12f;if(depthMode!=0)invalidate();}
       if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+215*unit){tab=Math.min(2,(int)((py-y-83*unit)/(44*unit)));invalidate();return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+232*unit&&py<=y+274*unit){motionMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
+        if(tab==1&&px>=right-65*unit&&px<=right&&py>=y+298*unit&&py<=y+331*unit){portalTransition=!portalTransition;save();invalidate();return true;}
+        if(tab==1&&px>=left&&px<=right&&py>=y+358*unit&&py<=y+394*unit){depthMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==0&&px>=left&&px<=right&&py>=y+71*unit&&py<=y+106*unit){save();loadColor(Math.min(2,(int)((px-left)/((right-left)/3))));for(int i=0;i<3;i++)shownValue[i]=target[i];invalidate();return true;}
         if(tab==0&&py>y+127*unit&&py<y+162*unit){int n=(int)((px-body-24*unit)/(34*unit));int[] colors={0xff9280ff,0xff54d7d2,0xfffd87a5,0xffffbe69,0xff12141f};if(n>=0&&n<5&&px>=body+24*unit){int col=colors[n];target[0]=Color.red(col)/255f;target[1]=Color.green(col)/255f;target[2]=Color.blue(col)/255f;save();invalidate();return true;}}
         if(px>=left-12*unit&&px<=right+12*unit){if(tab==0){for(int i=0;i<4;i++)if(Math.abs(py-(y+(197+i*51)*unit))<18*unit){active=i;break;}} else if(tab==1&&Math.abs(py-(y+176*unit))<18*unit)active=4;}

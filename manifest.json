@@ -2,12 +2,8 @@
   "type": "preload-native",
   "name": "LumaUI",
   "author": "Zxwmwmwm",
-  "description": "A customizable GUI-only overlay with space and stretch-bubble animations. Includes floating-button hotfix.",
-  "version": "1.0.0",
+  "description": "A customizable GUI-only overlay with a floating-button transition, layered depth, and animated themes.",
+  "version": "1.0.1",
   "entry": "libLumaUI.so",
-  "minecraft_versions": [
-    "1.26.62",
-    "1.26.62.*"
-  ],
-  "hf": true
+  "minecraft_versions": ["1.26.62", "1.26.62.*"]
 }
