@@ -186,7 +186,7 @@ public final class LumaUI {
       try{
         if(ModBridge.openCustomSettings(row)){close();return;}
         final Activity activity=(Activity)getContext();
-        settingsDialog=SettingsSheet.show(activity,row,accent(),palette[1],new Runnable(){public void run(){settingsDialog=null;if(!modReleased&&shown&&tab==3)syncModuleRows();}});
+        settingsDialog=SettingsSheet.show(activity,row,accent(),palette[1],target[4],touchRipple,new Runnable(){public void run(){settingsDialog=null;if(!modReleased&&shown&&tab==3)syncModuleRows();}});
       }catch(Throwable e){modStatus="Settings unavailable in this launcher";announceForAccessibility(modStatus);invalidate();}
     }
     void stopGesture(){modGesture=false;flingVelocity=0;if(modVelocity!=null){modVelocity.recycle();modVelocity=null;}}

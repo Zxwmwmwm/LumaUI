@@ -9,5 +9,8 @@ assert 'warpBitmap.recycle()' not in s
 assert 'if(act==MotionEvent.ACTION_UP&&!dragged&&!modBusy)activateModAt' in s
 assert 'if(act==MotionEvent.ACTION_UP&&dragged&&modLayout==0' in s
 assert 'ModBridge.renderSettings' in sheet and 'ModBridge.stopSettings(container)' in sheet
+assert 'dispatchTouchEvent(MotionEvent event)' in sheet and 'super.dispatchTouchEvent(event)' in sheet
+assert 'setClickable(false)' in sheet and 'animate&&!dialog.gestureActive' in sheet
+assert 'ValueAnimator.areAnimatorsEnabled()' in sheet and 'closeAnimated(true)' in sheet
 assert 'modLayout",selected' in s and 'saveModOffset()' in s and 'loadModOffset()' in s
-print('UI snapshot, settings and gesture lifecycle guards passed')
+print('UI snapshot, settings animation and gesture lifecycle guards passed')

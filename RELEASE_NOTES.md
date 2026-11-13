@@ -1,9 +1,8 @@
-## LumaUI 1.0.1 · Animated menus
+## LumaUI 1.0.1 · Settings motion
 
-- A Luma-inspired module settings sheet with accent colors and a custom dark-glass frame.
-- Elastic captures a stable transition snapshot instead of rewriting it every frame.
-- Choose paged, vertically scrolling, or sideways scrolling mod lists; layout and positions are saved.
-- Animated section indicators, list changes, switches, and settings-sheet entrance.
-- Launcher module controls and next-launch installed mod controls remain separate.
+- Added a smooth entrance and exit to the module settings sheet.
+- Settings content and newly displayed category cards animate into view.
+- Added lightweight accent touch feedback without replacing launcher controls or their handlers.
+- Settings animations use the configured LumaUI animation speed and respect Android’s animation setting. Touch feedback follows the Touch ripples option.
 
-Settings and synchronization use launcher internal APIs and may vary between launcher versions. Some modules open their own custom editor.
+Some modules open their own custom editor instead of LumaUI’s settings sheet.

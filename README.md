@@ -9,7 +9,7 @@ LumaUI is a customizable GUI-only overlay for LeviLauncher on Android. Make the 
 ## Features
 
 - **Menu transitions:** choose **Fade**, **Portal**, or **Elastic** in **Motion**. Elastic bends the interface toward the floating **L** button, drawing it into a stronger black-hole-like funnel when closed and unfurling it on opening. The button-to-menu effect can be turned off with Fade.
-- **Mods menu:** browse launcher modules and installed mods with a choice of paged, vertically scrolling, or sideways scrolling layouts. A Luma-styled gear sheet opens available module settings. Module switches use and sync with the launcher’s live controls; installed mod switches are saved for the next Minecraft launch (they do not unload a native library in the current session). Your selected tab, list layout, pages, and scroll positions are remembered.
+- **Mods menu:** browse launcher modules and installed mods with a choice of paged, vertically scrolling, or sideways scrolling layouts. A Luma-styled gear sheet opens available module settings with a soft entrance, animated setting cards, touch feedback, and a closing transition. Module switches use and sync with the launcher’s live controls; installed mod switches are saved for the next Minecraft launch (they do not unload a native library in the current session). Your selected tab, list layout, pages, and scroll positions are remembered.
 - **Interface depth:** choose **Flat**, **Soft**, or **Deep** for layered shadows, accent glow, and a touch-reactive glass highlight.
 - **Animated backgrounds:** choose **Off**, **Stretch** for drifting elastic bubbles, or **Space** for stars, streaks, and a glowing black hole.
 - **Independent colors:** customize the accent, panel, and effects with presets or RGB sliders. Panel opacity is adjustable.
@@ -30,7 +30,7 @@ LumaUI adds no gameplay features of its own. Its Mods tab controls existing laun
 
 ## Compatibility
 
-LumaUI targets Minecraft Bedrock 1.26.62 and 1.26.62.x on Android ARM64. Android 9 or newer is recommended; the launcher must provide its internal `InbuiltOverlayManager`. The Mods tab uses launcher internal APIs; availability may vary with launcher versions, and the menu reports when a provider is unavailable. Lighter panel colors can reduce text contrast.
+LumaUI targets Minecraft Bedrock 1.26.62 and 1.26.62.x on Android ARM64. Android 9 or newer is recommended; the launcher must provide its internal `InbuiltOverlayManager`. The Mods tab uses launcher internal APIs; availability may vary with launcher versions, and the menu reports when a provider is unavailable. Lighter panel colors can reduce text contrast. Settings animations follow Android’s system animation setting; touch feedback follows LumaUI’s Touch ripples setting.
 
 ## Build
 
@@ -42,7 +42,7 @@ ANDROID_JAR=/path/to/android.jar \
 R8_JAR=/path/to/r8.jar bash build.sh
 ```
 
-The build creates `artifacts/libLumaUI.so` and `artifacts/LumaUI.levipack`. Run the transition geometry, spring, page-memory, list-layout, UI lifecycle guard, and launcher-bridge facade checks with `bash tests/run.sh`.
+The build creates `artifacts/libLumaUI.so` and `artifacts/LumaUI.levipack`. Run the transition geometry, spring, page-memory, list-layout, UI lifecycle guard, settings-motion, and launcher-bridge facade checks with `bash tests/run.sh`.
 
 ## License
 
