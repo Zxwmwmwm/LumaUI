@@ -39,6 +39,7 @@ public final class LumaUI {
   private static FrameLayout root;
   private static Panel panel;
   private static View bubble;
+  private static BubbleEffect bubbleEffect;
   private static final Runnable monitor = new Runnable() {
     public void run() {
       if (!enabled) return;
@@ -59,6 +60,7 @@ public final class LumaUI {
   public static void start() { MAIN.post(new Runnable(){ public void run(){ if (!enabled) { enabled=true; monitor.run(); } }}); }
   public static void stop() { MAIN.post(new Runnable(){ public void run(){ enabled=false; MAIN.removeCallbacks(monitor); detach(); }}); }
   private static void detach() {
+    finishBubbleEffect();
     if (panel != null) panel.release();
     if (root != null && root.getParent() instanceof ViewGroup) ((ViewGroup)root.getParent()).removeView(root);
     root=null; panel=null; bubble=null; attached=null;
@@ -70,7 +72,8 @@ public final class LumaUI {
     panel=new Panel(a); panel.setVisibility(View.GONE);
     root.addView(panel, new FrameLayout.LayoutParams(-1,-1));
     bubble=new Bubble(a);
-    FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(dp(a,48),dp(a,48), Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+    int buttonSize=buttonSizeDp(a.getSharedPreferences("lumaui_settings",0).getInt("buttonSize",1));
+    FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(dp(a,buttonSize),dp(a,buttonSize), Gravity.RIGHT|Gravity.CENTER_VERTICAL);
     p.rightMargin=dp(a,12); root.addView(bubble,p);
     final FrameLayout host=root; final View button=bubble; final Panel sheet=panel;
     final SharedPreferences position=a.getSharedPreferences("lumaui_settings",0);
@@ -79,7 +82,7 @@ public final class LumaUI {
       public boolean onTouch(View v,MotionEvent e){
         switch(e.getActionMasked()){
           case MotionEvent.ACTION_DOWN:
-            downX=e.getRawX();downY=e.getRawY();startX=v.getX();startY=v.getY();dragging=false;return true;
+            finishBubbleEffect();downX=e.getRawX();downY=e.getRawY();startX=v.getX();startY=v.getY();dragging=false;return true;
           case MotionEvent.ACTION_MOVE:
             float dx=e.getRawX()-downX,dy=e.getRawY()-downY;
             if(!dragging && dx*dx+dy*dy>dp(v.getContext(),8)*dp(v.getContext(),8)) dragging=true;
@@ -97,6 +100,46 @@ public final class LumaUI {
     a.addContentView(root,new ViewGroup.LayoutParams(-1,-1));
     host.post(new Runnable(){public void run(){if(position.contains("buttonX")){button.setX(Math.max(0,Math.min(1,position.getFloat("buttonX",1)))*Math.max(0,host.getWidth()-button.getWidth()));button.setY(Math.max(0,Math.min(1,position.getFloat("buttonY",.5f)))*Math.max(0,host.getHeight()-button.getHeight()));}}});
   }
+  private static int buttonSizeDp(int size){return size==0?40:size==2?56:48;}
+  private static void finishBubbleEffect(){if(bubbleEffect!=null)bubbleEffect.finish();}
+  private static void resizeBubble(final int selection){
+    if(root==null||bubble==null)return;final FrameLayout host=root;final View button=bubble;
+    float oldX=Math.max(1,host.getWidth()-button.getWidth()),oldY=Math.max(1,host.getHeight()-button.getHeight());
+    final float px=Math.max(0,Math.min(1,button.getX()/oldX)),py=Math.max(0,Math.min(1,button.getY()/oldY));
+    int wanted=dp(button.getContext(),buttonSizeDp(selection));ViewGroup.LayoutParams layout=button.getLayoutParams();
+    if(layout.width==wanted&&layout.height==wanted)return;
+    button.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener(){public void onGlobalLayout(){
+      if(button.getViewTreeObserver().isAlive())button.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+      if(root!=host||bubble!=button)return;button.setX(px*Math.max(0,host.getWidth()-button.getWidth()));button.setY(py*Math.max(0,host.getHeight()-button.getHeight()));
+      button.getContext().getSharedPreferences("lumaui_settings",0).edit().putFloat("buttonX",px).putFloat("buttonY",py).apply();
+      if(panel!=null&&panel.shown){panel.anchorWidth=button.getWidth();panel.anchorHeight=button.getHeight();panel.anchorX=button.getX()+panel.anchorWidth/2f;panel.anchorY=button.getY()+panel.anchorHeight/2f;panel.haveAnchor=panel.anchorWidth>0&&panel.anchorHeight>0;}}});
+    layout.width=wanted;layout.height=wanted;button.setLayoutParams(layout);
+  }
+  private static void revealBubble(int style,float speed){
+    if(root==null||bubble==null)return;finishBubbleEffect();bubble.setVisibility(View.VISIBLE);
+    if(style==ButtonMotion.NONE||!android.animation.ValueAnimator.areAnimatorsEnabled()){bubble.setAlpha(1);bubble.setScaleX(1);bubble.setScaleY(1);return;}
+    final FrameLayout host=root;final View button=bubble;int size=dp(button.getContext(),144);
+    BubbleEffect effect=new BubbleEffect(button.getContext(),button,style,speed);bubbleEffect=effect;
+    FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(size,size);host.addView(effect,lp);
+    effect.setX(button.getX()+button.getWidth()/2f-size/2f);effect.setY(button.getY()+button.getHeight()/2f-size/2f);effect.begin();
+  }
+  private static final class BubbleEffect extends View {
+    final View button;final int style,accent;final long duration;final Paint paint=new Paint(3);long started;boolean ended;
+    BubbleEffect(Context context,View button,int style,float speed){super(context);this.button=button;this.style=style;duration=ButtonMotion.duration(speed);
+      SharedPreferences prefs=context.getSharedPreferences("lumaui_settings",0);accent=prefs.getInt("effectColor",0xff9280ff);setClickable(false);setFocusable(false);setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
+    void begin(){button.setAlpha(0);button.setScaleX(.48f);button.setScaleY(.48f);started=android.os.SystemClock.uptimeMillis();invalidate();}
+    void finish(){if(ended)return;ended=true;button.setAlpha(1);button.setScaleX(1);button.setScaleY(1);if(getParent() instanceof ViewGroup)((ViewGroup)getParent()).removeView(this);if(bubbleEffect==this)bubbleEffect=null;}
+    protected void onDraw(Canvas c){if(ended)return;float t=Math.min(1,(android.os.SystemClock.uptimeMillis()-started)/(float)duration);if(t>=1){post(new Runnable(){public void run(){finish();}});return;}
+      float reveal=ButtonMotion.reveal(t),halo=ButtonMotion.halo(t);button.setAlpha(reveal);float b=.48f+.52f*reveal;button.setScaleX(b);button.setScaleY(b);
+      float cx=getWidth()/2f,cy=getHeight()/2f,d=getResources().getDisplayMetrics().density,r=button.getWidth()*.46f;
+      paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(2*d);paint.setColor((accent&0xffffff)|((int)(180*halo)<<24));
+      if(style==ButtonMotion.PORTAL){float radius=r*(.22f+1.25f*ButtonMotion.ease(t*2));c.drawCircle(cx,cy,radius,paint);
+        c.save();c.rotate(t*230,cx,cy);paint.setStrokeWidth(1.4f*d);c.drawOval(new RectF(cx-radius*1.2f,cy-radius*.60f,cx+radius*1.2f,cy+radius*.60f),paint);c.rotate(90,cx,cy);c.drawOval(new RectF(cx-radius*1.2f,cy-radius*.60f,cx+radius*1.2f,cy+radius*.60f),paint);c.restore();
+      }else if(style==ButtonMotion.PULSE){for(int i=0;i<2;i++){float a=Math.max(0,Math.min(1,(t-i*.12f)/.75f));paint.setColor((accent&0xffffff)|((int)(155*(1-a)*halo)<<24));c.drawCircle(cx,cy,r*(.35f+1.7f*a),paint);}}
+      else if(style==ButtonMotion.ORBIT){c.drawCircle(cx,cy,r*(.8f+.5f*halo),paint);paint.setStyle(Paint.Style.FILL);for(int i=0;i<8;i++){double angle=t*9+i*Math.PI/4;float dist=r*(1.7f-1.1f*ButtonMotion.ease(t));paint.setColor((accent&0xffffff)|((int)(220*halo)<<24));c.drawCircle(cx+(float)Math.cos(angle)*dist,cy+(float)Math.sin(angle)*dist,2.4f*d,paint);}}
+      postInvalidateOnAnimation();
+    }
+  }
   private static final class Bubble extends View {
     final Paint p=new Paint(3); Bubble(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
     protected void onDraw(Canvas c){float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;SharedPreferences prefs=getContext().getSharedPreferences("lumaui_settings",0);
@@ -104,18 +147,18 @@ public final class LumaUI {
       float glow=Math.max(0f,Math.min(1f,prefs.getFloat("glowStrength",.8f)));
       p.setStyle(Paint.Style.FILL);p.setColor(0xff171925);p.setShadowLayer(w*.16f,0,0,(ac&0x00ffffff)|((int)(170*glow)<<24));c.drawCircle(w/2,h/2,w*.43f,p);p.clearShadowLayer();
       p.setShader(new RadialGradient(w*.34f,h*.24f,w*.8f,new int[]{(ac&0x00ffffff)|0x88000000,0x11171925,0x00171925},null,Shader.TileMode.CLAMP));c.drawCircle(w/2,h/2,w*.43f,p);p.setShader(null);
-      p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(w*.025f);p.setColor((ac&0x00ffffff)|0xdd000000);c.drawCircle(w/2,h/2,w*.43f,p);p.setStyle(Paint.Style.FILL);p.setColor(-1);p.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));p.setTextSize(w*.40f);p.setTextAlign(Paint.Align.CENTER);c.drawText("L",w/2,h*.65f,p);}
+      p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(w*.025f);p.setColor((ac&0x00ffffff)|0xdd000000);c.drawCircle(w/2,h/2,w*.43f,p);p.setStyle(Paint.Style.FILL);p.setColor(-1);p.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));p.setTextSize(w*.40f);p.setTextAlign(Paint.Align.CENTER);int icon=Math.max(0,Math.min(2,prefs.getInt("buttonIcon",0)));String[] icons={"L","✦","◆"};c.drawText(icons[icon],w/2,h*.65f,p);}
   }
   private static final class Panel extends View {
     final Paint p=new Paint(3), meshPaint=new Paint(3); final SharedPreferences prefs;
     static final int MESH_X=40,MESH_Y=24;final float[] mesh=new float[(MESH_X+1)*(MESH_Y+1)*2]; Bitmap warpBitmap; boolean snapshotValid;
     List<ModBridge.Row> modRows=new ArrayList<>(),allModRows=new ArrayList<>(); Set<String> moduleFavorites=new HashSet<>(),packageFavorites=new HashSet<>(); boolean favoritesKnown=false,favoritesOnly=false;String modQuery=""; Dialog searchDialog; boolean modPackages=false,modBusy=false,modReleased=false,modSyncBusy=false,modAvailable=false; int modPage=0,modRequest=0; String modStatus="";
-    final ModPages modPages=new ModPages(); final PlayField playField=new PlayField(); Dialog settingsDialog;
+    final ModPages modPages=new ModPages(); final PlayField[] playFields={new PlayField(),new PlayField(),new PlayField()}; BackgroundBlend backgroundBlend; Dialog settingsDialog;
     int modLayout=0;float modOffset=0,modAnim=0,gestureX,gestureY,gestureOffset,flingVelocity,categoryMotion,layoutMotion;boolean modGesture,modDragging;VelocityTracker modVelocity;
     final Map<String,Float> switchValues=new HashMap<>();
     final Runnable syncRunnable=new Runnable(){public void run(){if(modReleased||!shown||tab!=3)return;
       if(!modBusy){if(modPackages)refreshPackagesQuietly();else syncModuleRows();}postDelayed(this,modPackages?4000:1200);}};
-    float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2;
+    float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2,buttonReturn=1,buttonSize=1,buttonIcon=0;
     final TransitionMath.Spring spring=new TransitionMath.Spring(); float tapAge=1f,tapX,tapY; long resetArmedUntil;
     final int[] palette=new int[3]; float phaseTime=0, lightX=.82f, lightY=.12f, targetLightX=.82f, targetLightY=.12f;
     float[] target=new float[6], shownValue=new float[6];
@@ -123,10 +166,11 @@ public final class LumaUI {
     Panel(Context c){ super(c); setClickable(true); prefs=c.getSharedPreferences("lumaui_settings",0);
       palette[0]=prefs.getInt("accentColor",Color.rgb((int)(prefs.getFloat("red",.57f)*255),(int)(prefs.getFloat("green",.50f)*255),(int)(prefs.getFloat("blue",1f)*255)));
       palette[1]=prefs.getInt("panelColor",0xff12141f); palette[2]=prefs.getInt("effectColor",0xff9280ff);
-      motionMode=Math.max(0,Math.min(5,prefs.getInt("motionMode",prefs.getBoolean("bubbles",true)?1:0)));
+      motionMode=Math.max(0,Math.min(5,prefs.getInt("motionMode",prefs.getBoolean("bubbles",true)?1:0)));backgroundBlend=new BackgroundBlend(motionMode);
       transitionStyle=Math.max(0,Math.min(2,prefs.getInt("transitionStyle",prefs.getBoolean("portalTransition",true)?2:0)));
       depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));touchRipple=prefs.getBoolean("touchRipple",true);smoothBackground=prefs.getBoolean("smoothBackground",true);
-      tab=Math.max(0,Math.min(4,prefs.getInt("lastTab",0)));tabMotion=tab;modPackages=prefs.getBoolean("modPackages",false);
+      buttonReturn=Math.max(0,Math.min(3,prefs.getInt("buttonReturn",1)));buttonSize=Math.max(0,Math.min(2,prefs.getInt("buttonSize",1)));buttonIcon=Math.max(0,Math.min(2,prefs.getInt("buttonIcon",0)));
+      tab=Math.max(0,Math.min(5,prefs.getInt("lastTab",0)));tabMotion=tab;modPackages=prefs.getBoolean("modPackages",false);
       modPages.set(false,prefs.getInt("modulePage",0));modPages.set(true,prefs.getInt("packagePage",0));modPage=modPages.get(modPackages);
       packageFavorites=new HashSet<>(prefs.getStringSet("packageFavorites",new HashSet<String>()));
       modLayout=Math.max(0,Math.min(2,prefs.getInt("modLayout",0)));categoryMotion=modPackages?1:0;layoutMotion=modLayout;loadModOffset();
@@ -144,7 +188,7 @@ public final class LumaUI {
       TransitionMath.warpMesh(width,height,ax,ay,progress,MESH_X,MESH_Y,mesh);
       target.drawBitmapMesh(warpBitmap,MESH_X,MESH_Y,mesh,0,null,0,meshPaint);
     }
-    void open(){recycleWarp();shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.GONE);}setVisibility(View.VISIBLE);if(tab==3){ensureMods();startSync();}invalidate();}
+    void open(){finishBubbleEffect();recycleWarp();shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.INVISIBLE);}setVisibility(View.VISIBLE);if(tab==3){ensureMods();startSync();}invalidate();}
     void ensureMods(){if(!modPackages&&!allModRows.isEmpty()&&!modBusy)syncModuleRows();else refreshMods();}
     String offsetKey(){return (modPackages?"package":"module")+(modLayout==1?"VerticalOffset":"HorizontalOffset");}
     void loadModOffset(){modOffset=modLayout==0?0:Math.max(0,prefs.getFloat(offsetKey(),0));}
@@ -211,13 +255,13 @@ public final class LumaUI {
       }catch(Throwable e){modStatus="Settings unavailable in this launcher";announceForAccessibility(modStatus);invalidate();}
     }
     void stopGesture(){modGesture=false;flingVelocity=0;if(modVelocity!=null){modVelocity.recycle();modVelocity=null;}}
-    void close(){recycleWarp();shown=false;playField.pressed=false;stopGesture();saveModOffset();active=-1;removeCallbacks(syncRunnable);invalidate();}
+    void close(){recycleWarp();shown=false;for(PlayField field:playFields)field.pressed=false;stopGesture();saveModOffset();active=-1;removeCallbacks(syncRunnable);invalidate();}
     void loadColor(int slot){colorSlot=slot;int color=palette[slot];target[0]=Color.red(color)/255f;target[1]=Color.green(color)/255f;target[2]=Color.blue(color)/255f;}
     void recordColor(){palette[colorSlot]=Color.rgb((int)(target[0]*255),(int)(target[1]*255),(int)(target[2]*255));}
-    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putFloat("glowStrength",target[5]).apply();if(bubble!=null)bubble.invalidate();}
+    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putFloat("glowStrength",target[5]).putInt("buttonReturn",buttonReturn).putInt("buttonSize",buttonSize).putInt("buttonIcon",buttonIcon).apply();if(bubble!=null)bubble.invalidate();}
     int accent(){return colorSlot==0?Color.rgb((int)(shownValue[0]*255),(int)(shownValue[1]*255),(int)(shownValue[2]*255)):palette[0];}
     int alpha(int color,int a){return (color&0xffffff)|(Math.max(0,Math.min(255,a))<<24);}
-    void resetVisuals(){palette[0]=0xff9280ff;palette[1]=0xff12141f;palette[2]=0xff9280ff;loadColor(0);target[3]=.92f;target[4]=.5f;target[5]=.8f;motionMode=1;depthMode=2;transitionStyle=2;touchRipple=true;smoothBackground=true;resetArmedUntil=0;save();invalidate();}
+    void resetVisuals(){palette[0]=0xff9280ff;palette[1]=0xff12141f;palette[2]=0xff9280ff;loadColor(0);target[3]=.92f;target[4]=.5f;target[5]=.8f;motionMode=1;backgroundBlend.select(1);for(PlayField field:playFields)field.pressed=false;depthMode=2;transitionStyle=2;touchRipple=true;smoothBackground=true;buttonReturn=1;buttonSize=1;buttonIcon=0;resetArmedUntil=0;save();resizeBubble(buttonSize);invalidate();}
     void round(Canvas c,float l,float t,float r,float b,float radius,int color){p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawRoundRect(new RectF(l,t,r,b),radius,radius,p);}
     void text(Canvas c,String s,float a,float b,float size,int col,boolean bold){p.setColor(col);p.setStyle(Paint.Style.FILL);p.setTypeface(android.graphics.Typeface.create(bold?"sans-serif-medium":"sans-serif",0));p.setTextAlign(Paint.Align.LEFT);p.setTextSize(size);c.drawText(s,a,b,p);}
     void depthShadow(Canvas c,int ac){
@@ -245,7 +289,7 @@ public final class LumaUI {
     protected void onDraw(Canvas c){
       long now=android.os.SystemClock.uptimeMillis();float dt=last==0?.016f:Math.min(.05f,(now-last)/1000f);last=now;
       phaseTime+=dt*(.35f+target[4]*1.3f);float speed=10f+target[4]*14f;float k=1f-(float)Math.exp(-dt*speed);
-      if(shown&&motionMode>=3)playField.step(dt*(.6f+target[4]),motionMode);
+      if(shown){backgroundBlend.step(dt,target[4]);for(int mode=3;mode<=5;mode++)if(backgroundBlend.weight(mode)>.001f||mode==motionMode)playFields[mode-3].step(dt*(.6f+target[4]),mode);}
       open=spring.step(shown?1f:0f,dt,target[4]);tabMotion+=(tab-tabMotion)*k;modAnim=Math.max(0,modAnim-dt*3.8f);
       categoryMotion+=((modPackages?1f:0f)-categoryMotion)*k;layoutMotion+=(modLayout-layoutMotion)*k;
       if(Math.abs(flingVelocity)>1f&&!modGesture&&shown&&tab==3&&modLayout!=0){float before=modOffset;modOffset=ModLayout.clamp(modOffset+flingVelocity*dt,modLayout,modRows.size(),viewportUnits());
@@ -253,11 +297,11 @@ public final class LumaUI {
       boolean switchesAnimating=false;float mix=1f-(float)Math.exp(-dt*12f);
       for(ModBridge.Row row:modRows){String id=(row.packageMod?"P:":row.source+":")+row.id;Float v=switchValues.get(id);float goal=row.enabled?1f:0f;float value=v==null?goal:v+(goal-v)*mix;if(Math.abs(goal-value)<.005f)value=goal;else switchesAnimating=true;switchValues.put(id,value);}
       if(tapAge<1f)tapAge=Math.min(1f,tapAge+dt*2.7f);
-      boolean anim=modAnim>0||switchesAnimating||Math.abs(flingVelocity)>1f||Math.abs(categoryMotion-(modPackages?1f:0f))>.002f||Math.abs(layoutMotion-modLayout)>.002f||Math.abs((shown?1:0)-open)>.002f||Math.abs(spring.velocity())>.01f||Math.abs(tab-tabMotion)>.002f||(touchRipple&&tapAge<1f);
+      boolean anim=backgroundBlend.active()||modAnim>0||switchesAnimating||Math.abs(flingVelocity)>1f||Math.abs(categoryMotion-(modPackages?1f:0f))>.002f||Math.abs(layoutMotion-modLayout)>.002f||Math.abs((shown?1:0)-open)>.002f||Math.abs(spring.velocity())>.01f||Math.abs(tab-tabMotion)>.002f||(touchRipple&&tapAge<1f);
       lightX+=(targetLightX-lightX)*k;lightY+=(targetLightY-lightY)*k;
       anim|=depthMode!=0&&(Math.abs(targetLightX-lightX)>.002f||Math.abs(targetLightY-lightY)>.002f);
       for(int i=0;i<6;i++){shownValue[i]+=(target[i]-shownValue[i])*k;anim|=Math.abs(target[i]-shownValue[i])>.002f;}
-      if(!shown&&open<.01f){recycleWarp();open=0;spring.reset(0);setVisibility(View.GONE);if(bubble!=null)bubble.setVisibility(View.VISIBLE);return;}
+      if(!shown&&open<.01f){recycleWarp();open=0;spring.reset(0);setVisibility(View.GONE);revealBubble(buttonReturn,target[4]);return;}
       float W=getWidth(),H=getHeight(),density=getResources().getDisplayMetrics().density;if(W<=0||H<=0)return;unit=TransitionMath.layoutUnit(density,W,H);
       w=Math.min(W-24*unit,760*unit);h=Math.min(H-24*unit,440*unit);x=(W-w)/2;y=(H-h)/2;side=Math.min(185*unit,w*.29f);body=x+side;int ac=accent();
       c.drawColor(Color.argb((int)(125*open),0,0,0));
@@ -295,41 +339,11 @@ public final class LumaUI {
       depthShadow(c,ac);
       int bg=(int)((.68f+.31f*shownValue[3])*255*open);round(c,x,y,x+w,y+h,20*unit,Color.argb(bg,Color.red(palette[1]),Color.green(palette[1]),Color.blue(palette[1])));
       depthLight(c,ac);
-      if(motionMode!=0){
-        c.save(); Path clip=new Path(); clip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW); c.clipPath(clip);
-        int effect=palette[2]; float seconds=phaseTime;
-        if(motionMode==1){
-          for(int i=0;i<13;i++){
-            float phase=i*1.73f, radius=(5+(i%4)*4)*unit;
-            float bx=x+side+(w-side)*(.07f+((i*37)%86)/100f)+(float)Math.sin(seconds*.6f+phase)*9*unit;
-            float travel=(seconds*(8+i%4)*unit+i*47*unit)%(h+2*radius);
-            float by=y+h+radius-travel;
-            float stretch=1.05f+.35f*(.5f+.5f*(float)Math.sin(seconds*1.8f+phase));
-            RectF oval=new RectF(bx-radius/stretch,by-radius*stretch,bx+radius/stretch,by+radius*stretch);
-            p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)((12+(i%3)*6)*open)));c.drawOval(oval,p);
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(effect,(int)(38*open)));c.drawOval(oval,p);
-          }
-        } else if(motionMode==2) {
-          for(int i=0;i<48;i++){
-            float sx=body+((i*79)%997)/997f*(w-side), sy=y+((i*131)%991)/991f*h;
-            float pulse=.45f+.55f*(float)(.5+.5*Math.sin(seconds*1.5+i*2.1));
-            p.setColor(alpha(i%3==0?effect:0xffe7e8ff,(int)(70*pulse*open)));p.setStyle(Paint.Style.FILL);c.drawCircle(sx,sy,(i%5==0?1.6f:.8f)*unit,p);
-          }
-          for(int i=0;i<2;i++){float t=(seconds*.09f+i*.53f)%1f;float sx=body+(w-side)*(1f-t),sy=y+(.14f+.32f*i)*h+t*25*unit;
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((i==0?1.3f:.8f)*unit);p.setColor(alpha(effect,(int)(65*Math.sin(Math.PI*t)*open)));
-            c.drawLine(sx,sy,sx-26*unit,sy+9*unit,p);p.setStyle(Paint.Style.FILL);}
-          float cx=x+w-110*unit,cy=y+h-85*unit;
-          c.save(); c.translate(cx,cy); c.rotate(-18);
-          p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(0,0,68*unit,new int[]{alpha(effect,(int)(60*shownValue[5]*open)),alpha(effect,(int)(18*shownValue[5]*open)),0x00000000},null,Shader.TileMode.CLAMP));
-          c.drawCircle(0,0,68*unit,p);p.setShader(null);
-          for(int i=4;i>=0;i--){float r=(30+i*6)*unit;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((i==0?3:1.2f)*unit);p.setColor(alpha(effect,(int)((28-i*4)*open)));c.drawOval(new RectF(-r,-r*.34f,r,r*.34f),p);}
-          p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xff050610,(int)(220*open)));c.drawCircle(0,0,22*unit,p);
-          p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2*unit);p.setColor(alpha(effect,(int)(90*open)));c.drawCircle(0,0,22*unit,p);
-          for(int i=0;i<9;i++){double theta=seconds*.8+i*6.2831853/9;float r=(38+(i%3)*5)*unit;p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(90*open)));c.drawCircle((float)Math.cos(theta)*r,(float)Math.sin(theta)*r*.34f,2*unit,p);}
-          c.restore();
-        }else drawPlayField(c,effect);
-        p.setStyle(Paint.Style.FILL);c.restore();
-      }
+      c.save();Path backgroundClip=new Path();backgroundClip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(backgroundClip);
+      for(int mode=1;mode<BackgroundBlend.COUNT;mode++){float weight=backgroundBlend.weight(mode);if(weight<.002f)continue;
+        c.save();float form=BackgroundBlend.formation(weight);c.scale(form,form,body+(w-side)*.5f,y+h*.5f);
+        drawBackground(c,mode,open*weight);c.restore();}
+      p.setStyle(Paint.Style.FILL);c.restore();
       p.setColor(alpha(ac,(int)(65*open)));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);c.drawRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,p);p.setStyle(Paint.Style.FILL);
       if(depthMode!=0){round(c,x+8*unit,y+8*unit,body-8*unit,y+h-8*unit,15*unit,alpha(0xff0b0c14,(int)((depthMode==2?62:32)*open)));
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(0xffffffff,(int)((depthMode==2?28:14)*open)));c.drawRoundRect(new RectF(x+2*unit,y+2*unit,x+w-2*unit,y+h-2*unit),18*unit,18*unit,p);p.setStyle(Paint.Style.FILL);}
@@ -337,10 +351,10 @@ public final class LumaUI {
       text(c,"LumaUI",x+57*unit,y+34*unit,19*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"YOUR SPACE",x+57*unit,y+48*unit,8*unit,alpha(0xffa7a8bd,(int)(220*open)),true);
       float menuY=y+83*unit; round(c,x+12*unit,menuY+tabMotion*44*unit,x+side-12*unit,menuY+37*unit+tabMotion*44*unit,10*unit,alpha(ac,(int)(45*open)));
       round(c,x+12*unit,menuY+tabMotion*44*unit+8*unit,x+15*unit,menuY+tabMotion*44*unit+29*unit,2*unit,alpha(ac,(int)(220*open)));
-      String[] tabs={"Appearance","Motion","Effects","Mods","About"}; for(int i=0;i<5;i++){int co=i==tab?0xfff5f4ff:0xff979aaa;text(c,tabs[i],x+24*unit,menuY+(i*44+24)*unit,13*unit,alpha(co,(int)(255*open)),i==tab);}
-      text(c,"GUI ONLY  •  v1.0.1",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
+      String[] tabs={"Appearance","Motion","Effects","Mods","About","Button"}; for(int i=0;i<6;i++){int co=i==tab?0xfff5f4ff:0xff979aaa;text(c,tabs[i],x+24*unit,menuY+(i*44+24)*unit,13*unit,alpha(co,(int)(255*open)),i==tab);}
+      text(c,"GUI ONLY  •  v1.1.0",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
       p.setColor(alpha(0xff6f7080,(int)(65*open)));p.setStrokeWidth(unit);c.drawLine(body,y+18*unit,body,y+h-18*unit,p);
-      text(c,tab==0?"Appearance":tab==1?"Motion":tab==2?"Effects":tab==3?"Mods":"About",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      text(c,tab==0?"Appearance":tab==1?"Motion":tab==2?"Effects":tab==3?"Mods":tab==4?"About":"Button",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
       round(c,x+w-48*unit,y+14*unit,x+w-15*unit,y+47*unit,10*unit,alpha(0xff777b94,(int)(38*open)));
       text(c,"×",x+w-36*unit,y+38*unit,25*unit,alpha(0xffe5e6f2,(int)(255*open)),false);
       float transition=1f-Math.min(.75f,Math.abs(tab-tabMotion)*.65f);
@@ -378,6 +392,7 @@ public final class LumaUI {
         round(c,left,y+320*unit,right,y+352*unit,9*unit,alpha(armed?0xffe27878:0xff505365,(int)((armed?100:50)*open)));
         text(c,armed?"Tap again to reset visual settings":"Reset visual settings",left+10*unit,y+341*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),armed);
       } else if(tab==3){drawMods(c,ac);
+      } else if(tab==5){drawButtonSettings(c,ac);
       } else {text(c,"A little more you.",body+24*unit,y+92*unit,16*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"A smooth, customizable interface.",body+24*unit,y+117*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);text(c,"No gameplay features are included.",body+24*unit,y+138*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);if(motionMode>=3)text(c,motionMode==3?"Tap the bubbles to pop them.":motionMode==4?"Draw a fading trail with your finger.":"Touch and drag to attract the sparks.",body+24*unit,y+170*unit,10*unit,alpha(ac,(int)(240*open)),false);}
       c.restore();
       if(touchRipple&&tapAge<1f){c.save();Path clip=new Path();clip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(clip);
@@ -385,20 +400,69 @@ public final class LumaUI {
         p.setStyle(Paint.Style.FILL);p.setColor(alpha(ac,(int)(25*life*open)));c.drawCircle(tapX,tapY,(4+20*tapAge)*unit,p);c.restore();}
       c.restore();
     }
-    void drawPlayField(Canvas c,int effect){
-      float bw=x+w-body,bh=h;
-      if(motionMode==PlayField.POP){for(int i=0;i<PlayField.COUNT;i++){
+    void drawButtonSettings(Canvas c,int ac){
+      float left=body+24*unit,right=x+w-32*unit;
+      text(c,"MAKE AN ENTRANCE",left,y+62*unit,9*unit,alpha(ac,(int)(255*open)),true);
+      text(c,"Button return animation",left,y+95*unit,13*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      String[] animations={"Off","Portal","Pulse","Orbit"};float quarter=(right-left)/4f;
+      for(int i=0;i<4;i++){float a=left+i*quarter;round(c,a,y+106*unit,a+quarter-5*unit,y+140*unit,9*unit,alpha(i==buttonReturn?ac:0xff505365,(int)((i==buttonReturn?110:50)*open)));text(c,animations[i],a+8*unit,y+128*unit,10*unit,alpha(Color.WHITE,(int)(245*open)),i==buttonReturn);}
+      String[] hints={"The button appears immediately.","A portal opens, reveals the button, then fades.","A soft ripple reveals the button.","Orbiting sparks gather around the button."};
+      text(c,hints[buttonReturn],left,y+162*unit,10*unit,alpha(0xffaeb0c5,(int)(255*open)),false);
+      text(c,"Button size",left,y+200*unit,13*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      String[] sizes={"Small","Medium","Large"};float third=(right-left)/3f;
+      for(int i=0;i<3;i++){float a=left+i*third;round(c,a,y+211*unit,a+third-5*unit,y+245*unit,9*unit,alpha(i==buttonSize?ac:0xff505365,(int)((i==buttonSize?105:50)*open)));text(c,sizes[i],a+9*unit,y+233*unit,10*unit,alpha(Color.WHITE,(int)(245*open)),i==buttonSize);}
+      text(c,"Button icon",left,y+284*unit,13*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      String[] icons={"Luma L","Star","Diamond"};
+      for(int i=0;i<3;i++){float a=left+i*third;round(c,a,y+295*unit,a+third-5*unit,y+329*unit,9*unit,alpha(i==buttonIcon?ac:0xff505365,(int)((i==buttonIcon?105:50)*open)));text(c,icons[i],a+9*unit,y+317*unit,10*unit,alpha(Color.WHITE,(int)(245*open)),i==buttonIcon);}
+      text(c,"Close the menu to see your button animation.",left,y+365*unit,10*unit,alpha(0xffaeb0c5,(int)(255*open)),false);
+    }
+    void drawBackground(Canvas c,int mode,float fade){
+        int effect=palette[2]; float seconds=phaseTime;
+        if(mode==1){
+          for(int i=0;i<13;i++){
+            float phase=i*1.73f, radius=(5+(i%4)*4)*unit;
+            float bx=x+side+(w-side)*(.07f+((i*37)%86)/100f)+(float)Math.sin(seconds*.6f+phase)*9*unit;
+            float travel=(seconds*(8+i%4)*unit+i*47*unit)%(h+2*radius);
+            float by=y+h+radius-travel;
+            float stretch=1.05f+.35f*(.5f+.5f*(float)Math.sin(seconds*1.8f+phase));
+            RectF oval=new RectF(bx-radius/stretch,by-radius*stretch,bx+radius/stretch,by+radius*stretch);
+            p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)((12+(i%3)*6)*fade)));c.drawOval(oval,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(effect,(int)(38*fade)));c.drawOval(oval,p);
+          }
+        } else if(mode==2) {
+          for(int i=0;i<48;i++){
+            float sx=body+((i*79)%997)/997f*(w-side), sy=y+((i*131)%991)/991f*h;
+            float pulse=.45f+.55f*(float)(.5+.5*Math.sin(seconds*1.5+i*2.1));
+            p.setColor(alpha(i%3==0?effect:0xffe7e8ff,(int)(70*pulse*fade)));p.setStyle(Paint.Style.FILL);c.drawCircle(sx,sy,(i%5==0?1.6f:.8f)*unit,p);
+          }
+          for(int i=0;i<2;i++){float t=(seconds*.09f+i*.53f)%1f;float sx=body+(w-side)*(1f-t),sy=y+(.14f+.32f*i)*h+t*25*unit;
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((i==0?1.3f:.8f)*unit);p.setColor(alpha(effect,(int)(65*Math.sin(Math.PI*t)*fade)));
+            c.drawLine(sx,sy,sx-26*unit,sy+9*unit,p);p.setStyle(Paint.Style.FILL);}
+          float cx=x+w-110*unit,cy=y+h-85*unit;
+          c.save(); c.translate(cx,cy); c.rotate(-18);
+          p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(0,0,68*unit,new int[]{alpha(effect,(int)(60*shownValue[5]*fade)),alpha(effect,(int)(18*shownValue[5]*fade)),0x00000000},null,Shader.TileMode.CLAMP));
+          c.drawCircle(0,0,68*unit,p);p.setShader(null);
+          for(int i=4;i>=0;i--){float r=(30+i*6)*unit;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((i==0?3:1.2f)*unit);p.setColor(alpha(effect,(int)((28-i*4)*fade)));c.drawOval(new RectF(-r,-r*.34f,r,r*.34f),p);}
+          p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xff050610,(int)(220*fade)));c.drawCircle(0,0,22*unit,p);
+          p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2*unit);p.setColor(alpha(effect,(int)(90*fade)));c.drawCircle(0,0,22*unit,p);
+          for(int i=0;i<9;i++){double theta=seconds*.8+i*6.2831853/9;float r=(38+(i%3)*5)*unit;p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(90*fade)));c.drawCircle((float)Math.cos(theta)*r,(float)Math.sin(theta)*r*.34f,2*unit,p);}
+          c.restore();
+        }else drawPlayField(c,effect,mode,fade);
+    }
+    void drawPlayField(Canvas c,int effect,int mode,float fade){
+      PlayField playField=playFields[mode-3];float bw=x+w-body,bh=h;
+      if(mode==PlayField.POP){for(int i=0;i<PlayField.COUNT;i++){
         float cx=body+playField.x[i]*bw,cy=y+playField.y[i]*bh,r=(7+i%4*2)*unit,burst=playField.burst[i];
-        if(burst>0){float t=1-burst/.36f;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.3f*unit);p.setColor(alpha(effect,(int)(150*(1-t)*open)));c.drawCircle(cx,cy,r*(1+t*2.2f),p);}
-        else{p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(28*open)));c.drawCircle(cx,cy,r,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(effect,(int)(120*open)));c.drawCircle(cx,cy,r,p);}
-      }}else if(motionMode==PlayField.TRAIL){
+        if(burst>0){float t=1-burst/.36f;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.3f*unit);p.setColor(alpha(effect,(int)(150*(1-t)*fade)));c.drawCircle(cx,cy,r*(1+t*2.2f),p);}
+        else{p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(28*fade)));c.drawCircle(cx,cy,r,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(effect,(int)(120*fade)));c.drawCircle(cx,cy,r,p);}
+      }}else if(mode==PlayField.TRAIL){
         for(int i=0;i<PlayField.TRAIL_COUNT;i++){int j=(i+1)%PlayField.TRAIL_COUNT;float life=Math.max(0,1-playField.age[i]/1.5f);if(life<=0)continue;
-          float cx=body+playField.tx[i]*bw,cy=y+playField.ty[i]*bh;p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(135*life*open)));c.drawCircle(cx,cy,(2+3*life)*unit,p);
-          if(playField.age[j]<playField.age[i]&&playField.age[j]<1.5f){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((1+2*life)*unit);p.setColor(alpha(effect,(int)(100*life*open)));c.drawLine(cx,cy,body+playField.tx[j]*bw,y+playField.ty[j]*bh,p);}}
-      }else if(motionMode==PlayField.MAGNET){for(int i=0;i<PlayField.COUNT;i++){
+          float cx=body+playField.tx[i]*bw,cy=y+playField.ty[i]*bh;p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(135*life*fade)));c.drawCircle(cx,cy,(2+3*life)*unit,p);
+          if(playField.age[j]<playField.age[i]&&playField.age[j]<1.5f){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((1+2*life)*unit);p.setColor(alpha(effect,(int)(100*life*fade)));c.drawLine(cx,cy,body+playField.tx[j]*bw,y+playField.ty[j]*bh,p);}}
+      }else if(mode==PlayField.MAGNET){for(int i=0;i<PlayField.COUNT;i++){
         float cx=body+playField.x[i]*bw,cy=y+playField.y[i]*bh;
-        if(playField.pressed){float dx=(playField.x[i]-playField.pointerX),dy=playField.y[i]-playField.pointerY;if(dx*dx+dy*dy<.08f){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.7f*unit);p.setColor(alpha(effect,(int)(55*open)));c.drawLine(cx,cy,body+playField.pointerX*bw,y+playField.pointerY*bh,p);}}
-        p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(140*open)));c.drawCircle(cx,cy,(2+(i%3))*unit,p);
+        if(playField.pressed){float dx=(playField.x[i]-playField.pointerX),dy=playField.y[i]-playField.pointerY;if(dx*dx+dy*dy<.08f){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.7f*unit);p.setColor(alpha(effect,(int)(55*fade)));c.drawLine(cx,cy,body+playField.pointerX*bw,y+playField.pointerY*bh,p);}}
+        p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)(140*fade)));c.drawCircle(cx,cy,(2+(i%3))*unit,p);
       }}p.setStyle(Paint.Style.FILL);
     }
     float switchValue(ModBridge.Row row){Float v=switchValues.get((row.packageMod?"P:":row.source+":")+row.id);return v==null?(row.enabled?1:0):v;}
@@ -469,7 +533,7 @@ public final class LumaUI {
     }
     public boolean onTouchEvent(MotionEvent e){float px=e.getX(),py=e.getY();int act=e.getActionMasked();float left=body+24*unit,right=x+w-32*unit;
       if(open<.98f||!shown)return true;
-      if(motionMode>=3){boolean inside=px>=body&&px<=x+w&&py>=y&&py<=y+h;
+      if(motionMode>=3){PlayField playField=playFields[motionMode-3];boolean inside=px>=body&&px<=x+w&&py>=y&&py<=y+h;
         if((act==MotionEvent.ACTION_DOWN&&inside)||(act==MotionEvent.ACTION_MOVE&&playField.pressed)){
           float bw=Math.max(1,x+w-body);playField.pointer((px-body)/bw,(py-y)/Math.max(1,h),true,motionMode,bw/Math.max(1,h));invalidate();
         }else if(act==MotionEvent.ACTION_UP||act==MotionEvent.ACTION_CANCEL){playField.pressed=false;}}
@@ -489,7 +553,7 @@ public final class LumaUI {
           if(dragged&&modLayout!=0){if(flingVelocity==0)saveModOffset();else invalidate();}return true;}
         return true;
       }
-      if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+303*unit){int newTab=Math.min(4,(int)((py-y-83*unit)/(44*unit)));if(newTab!=tab){saveModOffset();stopGesture();tab=newTab;prefs.edit().putInt("lastTab",tab).apply();removeCallbacks(syncRunnable);if(tab==3){ensureMods();startSync();startListAnimation();}}invalidate();return true;}
+      if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+347*unit){int newTab=Math.min(5,(int)((py-y-83*unit)/(44*unit)));if(newTab!=tab){saveModOffset();stopGesture();tab=newTab;prefs.edit().putInt("lastTab",tab).apply();removeCallbacks(syncRunnable);if(tab==3){ensureMods();startSync();startListAnimation();}}invalidate();return true;}
         if(tab==3&&px>=left&&px<=right){
           if(py>=y+70*unit&&py<=y+96*unit){boolean selection=px>=left+(right-left)/2; if(selection!=modPackages){saveModPage();saveModOffset();stopGesture();modPackages=selection;prefs.edit().putBoolean("modPackages",selection).apply();modPage=filtering()?0:modPages.get(selection);if(filtering())modOffset=0;else loadModOffset();modRows=new ArrayList<>();allModRows=new ArrayList<>();modAvailable=false;refreshMods();startListAnimation();}return true;}
           if(py>=y+102*unit&&py<=y+129*unit){if(px>=right-94*unit){if(!modPackages&&!favoritesKnown){modStatus="Launcher favorites unavailable";invalidate();}else changeFilter(modQuery,!favoritesOnly);}else showSearch();return true;}
@@ -497,7 +561,12 @@ public final class LumaUI {
           if(py>=y+166*unit&&py<=y+342*unit&&!modBusy){stopGesture();modGesture=true;modDragging=false;gestureX=px;gestureY=py;gestureOffset=modOffset;modVelocity=VelocityTracker.obtain();modVelocity.addMovement(e);return true;}
           if(modLayout==0&&py>=y+367*unit&&py<=y+399*unit){if(px>=right-135*unit&&px<right-73*unit)modPage=Math.max(0,modPage-1);else if(px>=right-68*unit)modPage=Math.min(Math.max(0,(modRows.size()-1)/4),modPage+1);saveModPage();startListAnimation();return true;}
         }
-        if(tab==1&&px>=left&&px<=right&&py>=y+232*unit&&py<=y+283*unit){int row=(int)((py-y-232*unit)/(27*unit));float within=(py-y-232*unit)-row*27*unit;if(row<2&&within<=24*unit){int selected=Math.min(2,(int)((px-left)/((right-left)/3)))+row*3;if(selected!=motionMode){motionMode=selected;playField.reset();}save();invalidate();}return true;}
+        if(tab==5&&px>=left&&px<=right){
+          if(py>=y+106*unit&&py<=y+140*unit){buttonReturn=Math.max(0,Math.min(3,(int)((px-left)/((right-left)/4))));save();invalidate();return true;}
+          if(py>=y+211*unit&&py<=y+245*unit){int n=Math.max(0,Math.min(2,(int)((px-left)/((right-left)/3))));if(n!=buttonSize){buttonSize=n;resizeBubble(n);}save();invalidate();return true;}
+          if(py>=y+295*unit&&py<=y+329*unit){buttonIcon=Math.max(0,Math.min(2,(int)((px-left)/((right-left)/3))));save();invalidate();return true;}
+        }
+        if(tab==1&&px>=left&&px<=right&&py>=y+232*unit&&py<=y+283*unit){int row=(int)((py-y-232*unit)/(27*unit));float within=(py-y-232*unit)-row*27*unit;if(row<2&&within<=24*unit){int selected=Math.min(2,(int)((px-left)/((right-left)/3)))+row*3;if(selected!=motionMode){if(motionMode>=3)playFields[motionMode-3].pressed=false;motionMode=selected;backgroundBlend.select(selected);}save();invalidate();}return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+301*unit&&py<=y+337*unit){transitionStyle=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+358*unit&&py<=y+394*unit){depthMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==2&&px>=right-65*unit&&px<=right&&py>=y+178*unit&&py<=y+212*unit){touchRipple=!touchRipple;save();invalidate();return true;}

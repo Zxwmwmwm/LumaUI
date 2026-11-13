@@ -1,8 +1,8 @@
-## LumaUI 1.0.1 · Search, favorites & interactive backgrounds
+## LumaUI 1.1.0 · Forming backgrounds & button animations
 
-- Search modules and installed mods by name, group, or ID.
-- Star favorites and switch to a favorites-only view. Module favorites sync with LeviLauncher; installed-mod favorites stay in LumaUI.
-- Three interactive backgrounds: pop bubbles, draw a fading trail, or attract sparks with your finger.
-- Existing animated backgrounds, layout choices, settings controls, and remembered unfiltered positions remain available.
+- Backgrounds now cross-blend and gently form into view. Switching again during a transition starts from the current blend.
+- New **Button** tab: choose **Off**, **Portal**, **Pulse**, or **Orbit** for the floating button’s return after closing the menu. The portal opens, reveals the button, and fades away.
+- Choose the floating button’s size and icon; its position and settings are remembered. The return effect follows the animation-speed setting and Android’s system animation setting.
+- Search, favorites, interactive backgrounds, launcher mod controls, list layouts, settings, and menu transitions remain available.
 
-Choose the interactive backgrounds under **Motion**. Touch or drag the panel to play; the About tab offers open space. Launcher integration uses internal APIs and can vary by launcher version.
+Versioning follows Minecraft-breaking compatibility changes / features / bug fixes: this feature update moves 1.0.1 to 1.1.0. Launcher integration uses internal APIs and can vary by launcher version. Android device testing is still recommended.

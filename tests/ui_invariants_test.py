@@ -16,5 +16,9 @@ assert 'modLayout",selected' in s and 'saveModOffset()' in s and 'loadModOffset(
 assert 'if(filtering())return;modPages.set' in s and 'if(!filtering()&&modLayout!=0)' in s
 assert 'ModSearch.filter(allModRows' in s and 'ModBridge.syncModules(getContext(),allModRows)' in s
 assert '"Off","Stretch","Space","Pop","Trail","Magnet"' in s and 'playField.pointer(' in s
-assert 'playField.pressed=false' in s and 'else drawPlayField(c,effect)' in s
+assert 'playField.pressed=false' in s and 'drawPlayField(c,effect,mode,fade)' in s
+assert 'finishBubbleEffect();recycleWarp();shown=true' in s and 'finishBubbleEffect();\n    if (panel != null)' in s
+assert 'revealBubble(buttonReturn,target[4])' in s and 'setVisibility(View.INVISIBLE)' in s
+assert '"Off","Portal","Pulse","Orbit"' in s and 'putInt("buttonReturn",buttonReturn)' in s
+assert 'backgroundBlend.select(selected)' in s and 'backgroundBlend.step(dt,target[4])' in s
 print('UI snapshot, search, background and gesture lifecycle guards passed')
