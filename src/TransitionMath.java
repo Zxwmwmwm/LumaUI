@@ -30,6 +30,16 @@ final class TransitionMath {
     float swirl=.48f*p*bend;
     result[at]=anchorX+vx*scale-vy*swirl;result[at+1]=anchorY+vy*scale+vx*swirl;
   }
+  static void warpMesh(float width,float height,float anchorX,float anchorY,float progress,int columns,int rows,float[] out){
+    float p=clamp(progress),farX=Math.max(Math.abs(anchorX),Math.abs(width-anchorX)),farY=Math.max(Math.abs(anchorY),Math.abs(height-anchorY));
+    float max=(float)Math.sqrt(farX*farX+farY*farY);int at=0;
+    for(int row=0;row<=rows;row++)for(int col=0;col<=columns;col++){
+      float vx=width*col/columns-anchorX,vy=height*row/rows-anchorY;
+      float distance=max>0?clamp((float)Math.sqrt(vx*vx+vy*vy)/max):0f;
+      float bend=(1f-distance)*(1f-p),scale=p*(1f-.92f*bend),swirl=.48f*p*bend;
+      out[at++]=anchorX+vx*scale-vy*swirl;out[at++]=anchorY+vy*scale+vx*swirl;
+    }
+  }
   static final class Spring {
     private float value,velocity;
     void reset(float initial){value=clamp(initial);velocity=0f;}

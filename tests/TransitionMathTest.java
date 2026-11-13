@@ -26,6 +26,8 @@ public final class TransitionMathTest {
     }
     float[] nearPoint=new float[2],farPoint=new float[2];TransitionMath.warpPoint(100,0,0,0,800,440,.5f,nearPoint,0);TransitionMath.warpPoint(800,0,0,0,800,440,.5f,farPoint,0);
     if(nearPoint[0]/100f>=farPoint[0]/800f)throw new AssertionError("warp must bend, not just scale");
+    float[] mesh=new float[(4+1)*(3+1)*2];TransitionMath.warpMesh(800,440,120,220,.5f,4,3,mesh);
+    for(int j=0;j<=3;j++)for(int i=0;i<=4;i++){TransitionMath.warpPoint(800f*i/4,440f*j/3,120,220,800,440,.5f,point,0);int index=(j*5+i)*2;near(mesh[index],point[0]);near(mesh[index+1],point[1]);}
     // A noticeably curved funnel while retaining positive mesh orientation.
     TransitionMath.warpPoint(100,0,0,0,800,440,.5f,point,0);if(point[1]<8f)throw new AssertionError("bend too subtle");
     for(float ax:new float[]{0,400,800})for(float ay:new float[]{0,220,440})for(float progress:new float[]{.05f,.2f,.5f,.8f,.95f}){
