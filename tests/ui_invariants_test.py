@@ -21,4 +21,9 @@ assert 'finishBubbleEffect();recycleWarp();shown=true' in s and 'finishBubbleEff
 assert 'revealBubble(buttonReturn,target[4])' in s and 'setVisibility(View.INVISIBLE)' in s
 assert '"Off","Portal","Pulse","Orbit"' in s and 'putInt("buttonReturn",buttonReturn)' in s
 assert 'backgroundBlend.select(selected)' in s and 'backgroundBlend.step(dt,target[4])' in s
+assert 'addOnPreDrawListener(styler)' in sheet and 'categories.get(view)!=view.getBackground()' in sheet
+assert 'animateCategoryContent(list,duration)' in sheet and 'super.dispatchTouchEvent(event)' in sheet
+assert 'setTrackActiveTintList' in sheet and 'blend(panel,accent' in sheet
+assert 'putBoolean("glowFollow",glowFollow)' in s and 'if(glowFollow&&(act==' in s
+assert 'playField.pointer((px-body)' in s and 'LavaMotion.sample' in s
 print('UI snapshot, search, background and gesture lifecycle guards passed')

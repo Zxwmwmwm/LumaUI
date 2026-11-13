@@ -158,8 +158,9 @@ public final class LumaUI {
     final Map<String,Float> switchValues=new HashMap<>();
     final Runnable syncRunnable=new Runnable(){public void run(){if(modReleased||!shown||tab!=3)return;
       if(!modBusy){if(modPackages)refreshPackagesQuietly();else syncModuleRows();}postDelayed(this,modPackages?4000:1200);}};
-    float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2,buttonReturn=1,buttonSize=1,buttonIcon=0;
+    float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true, glowFollow=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2,buttonReturn=1,buttonSize=1,buttonIcon=0;
     final TransitionMath.Spring spring=new TransitionMath.Spring(); float tapAge=1f,tapX,tapY; long resetArmedUntil;
+    final float[][] lavaShapes=new float[LavaMotion.COUNT][5];
     final int[] palette=new int[3]; float phaseTime=0, lightX=.82f, lightY=.12f, targetLightX=.82f, targetLightY=.12f;
     float[] target=new float[6], shownValue=new float[6];
     float x,y,w,h,side,body,unit,anchorX,anchorY,anchorWidth,anchorHeight; boolean haveAnchor; long last;
@@ -168,7 +169,7 @@ public final class LumaUI {
       palette[1]=prefs.getInt("panelColor",0xff12141f); palette[2]=prefs.getInt("effectColor",0xff9280ff);
       motionMode=Math.max(0,Math.min(5,prefs.getInt("motionMode",prefs.getBoolean("bubbles",true)?1:0)));backgroundBlend=new BackgroundBlend(motionMode);
       transitionStyle=Math.max(0,Math.min(2,prefs.getInt("transitionStyle",prefs.getBoolean("portalTransition",true)?2:0)));
-      depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));touchRipple=prefs.getBoolean("touchRipple",true);smoothBackground=prefs.getBoolean("smoothBackground",true);
+      depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));touchRipple=prefs.getBoolean("touchRipple",true);smoothBackground=prefs.getBoolean("smoothBackground",true);glowFollow=prefs.getBoolean("glowFollow",true);
       buttonReturn=Math.max(0,Math.min(3,prefs.getInt("buttonReturn",1)));buttonSize=Math.max(0,Math.min(2,prefs.getInt("buttonSize",1)));buttonIcon=Math.max(0,Math.min(2,prefs.getInt("buttonIcon",0)));
       tab=Math.max(0,Math.min(5,prefs.getInt("lastTab",0)));tabMotion=tab;modPackages=prefs.getBoolean("modPackages",false);
       modPages.set(false,prefs.getInt("modulePage",0));modPages.set(true,prefs.getInt("packagePage",0));modPage=modPages.get(modPackages);
@@ -258,10 +259,10 @@ public final class LumaUI {
     void close(){recycleWarp();shown=false;for(PlayField field:playFields)field.pressed=false;stopGesture();saveModOffset();active=-1;removeCallbacks(syncRunnable);invalidate();}
     void loadColor(int slot){colorSlot=slot;int color=palette[slot];target[0]=Color.red(color)/255f;target[1]=Color.green(color)/255f;target[2]=Color.blue(color)/255f;}
     void recordColor(){palette[colorSlot]=Color.rgb((int)(target[0]*255),(int)(target[1]*255),(int)(target[2]*255));}
-    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putFloat("glowStrength",target[5]).putInt("buttonReturn",buttonReturn).putInt("buttonSize",buttonSize).putInt("buttonIcon",buttonIcon).apply();if(bubble!=null)bubble.invalidate();}
+    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putBoolean("glowFollow",glowFollow).putFloat("glowStrength",target[5]).putInt("buttonReturn",buttonReturn).putInt("buttonSize",buttonSize).putInt("buttonIcon",buttonIcon).apply();if(bubble!=null)bubble.invalidate();}
     int accent(){return colorSlot==0?Color.rgb((int)(shownValue[0]*255),(int)(shownValue[1]*255),(int)(shownValue[2]*255)):palette[0];}
     int alpha(int color,int a){return (color&0xffffff)|(Math.max(0,Math.min(255,a))<<24);}
-    void resetVisuals(){palette[0]=0xff9280ff;palette[1]=0xff12141f;palette[2]=0xff9280ff;loadColor(0);target[3]=.92f;target[4]=.5f;target[5]=.8f;motionMode=1;backgroundBlend.select(1);for(PlayField field:playFields)field.pressed=false;depthMode=2;transitionStyle=2;touchRipple=true;smoothBackground=true;buttonReturn=1;buttonSize=1;buttonIcon=0;resetArmedUntil=0;save();resizeBubble(buttonSize);invalidate();}
+    void resetVisuals(){palette[0]=0xff9280ff;palette[1]=0xff12141f;palette[2]=0xff9280ff;loadColor(0);target[3]=.92f;target[4]=.5f;target[5]=.8f;motionMode=1;backgroundBlend.select(1);for(PlayField field:playFields)field.pressed=false;depthMode=2;transitionStyle=2;touchRipple=true;smoothBackground=true;glowFollow=true;buttonReturn=1;buttonSize=1;buttonIcon=0;resetArmedUntil=0;save();resizeBubble(buttonSize);invalidate();}
     void round(Canvas c,float l,float t,float r,float b,float radius,int color){p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawRoundRect(new RectF(l,t,r,b),radius,radius,p);}
     void text(Canvas c,String s,float a,float b,float size,int col,boolean bold){p.setColor(col);p.setStyle(Paint.Style.FILL);p.setTypeface(android.graphics.Typeface.create(bold?"sans-serif-medium":"sans-serif",0));p.setTextAlign(Paint.Align.LEFT);p.setTextSize(size);c.drawText(s,a,b,p);}
     void depthShadow(Canvas c,int ac){
@@ -352,7 +353,7 @@ public final class LumaUI {
       float menuY=y+83*unit; round(c,x+12*unit,menuY+tabMotion*44*unit,x+side-12*unit,menuY+37*unit+tabMotion*44*unit,10*unit,alpha(ac,(int)(45*open)));
       round(c,x+12*unit,menuY+tabMotion*44*unit+8*unit,x+15*unit,menuY+tabMotion*44*unit+29*unit,2*unit,alpha(ac,(int)(220*open)));
       String[] tabs={"Appearance","Motion","Effects","Mods","About","Button"}; for(int i=0;i<6;i++){int co=i==tab?0xfff5f4ff:0xff979aaa;text(c,tabs[i],x+24*unit,menuY+(i*44+24)*unit,13*unit,alpha(co,(int)(255*open)),i==tab);}
-      text(c,"GUI ONLY  •  v1.1.0",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
+      text(c,"GUI ONLY  •  v1.2.0",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
       p.setColor(alpha(0xff6f7080,(int)(65*open)));p.setStrokeWidth(unit);c.drawLine(body,y+18*unit,body,y+h-18*unit,p);
       text(c,tab==0?"Appearance":tab==1?"Motion":tab==2?"Effects":tab==3?"Mods":tab==4?"About":"Button",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
       round(c,x+w-48*unit,y+14*unit,x+w-15*unit,y+47*unit,10*unit,alpha(0xff777b94,(int)(38*open)));
@@ -384,16 +385,19 @@ public final class LumaUI {
         text(c,"Touch ripples",body+24*unit,y+200*unit,12*unit,alpha(0xffe4e5f0,(int)(255*open)),true);
         float right=x+w-32*unit;round(c,right-56*unit,y+181*unit,right,y+208*unit,9*unit,alpha(touchRipple?ac:0xff505365,(int)((touchRipple?125:70)*open)));
         text(c,touchRipple?"ON":"OFF",right-43*unit,y+199*unit,10*unit,alpha(Color.WHITE,(int)(255*open)),true);
-        text(c,"Background frame pacing",body+24*unit,y+241*unit,12*unit,alpha(0xffe4e5f0,(int)(255*open)),true);
+        text(c,"Glow follows touch",body+24*unit,y+242*unit,12*unit,alpha(0xffe4e5f0,(int)(255*open)),true);
+        round(c,right-56*unit,y+223*unit,right,y+250*unit,9*unit,alpha(glowFollow?ac:0xff505365,(int)((glowFollow?125:70)*open)));
+        text(c,glowFollow?"ON":"OFF",right-43*unit,y+241*unit,10*unit,alpha(Color.WHITE,(int)(255*open)),true);
+        text(c,"Background frame pacing",body+24*unit,y+282*unit,12*unit,alpha(0xffe4e5f0,(int)(255*open)),true);
         float left=body+24*unit,half=(right-left)/2f;String[] frames={"Eco","Smooth"};
-        for(int i=0;i<2;i++){boolean selected=(i==1)==smoothBackground;float sl=left+i*half;round(c,sl,y+250*unit,sl+half-5*unit,y+280*unit,9*unit,alpha(selected?ac:0xff505365,(int)((selected?100:50)*open)));text(c,frames[i],sl+9*unit,y+270*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),selected);}
-        text(c,"Eco reduces background redraws; transitions stay smooth.",body+24*unit,y+301*unit,10*unit,alpha(0xffa4a7bb,(int)(255*open)),false);
+        for(int i=0;i<2;i++){boolean selected=(i==1)==smoothBackground;float sl=left+i*half;round(c,sl,y+290*unit,sl+half-5*unit,y+320*unit,9*unit,alpha(selected?ac:0xff505365,(int)((selected?100:50)*open)));text(c,frames[i],sl+9*unit,y+310*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),selected);}
+        text(c,"Eco reduces background redraws; transitions stay smooth.",body+24*unit,y+338*unit,10*unit,alpha(0xffa4a7bb,(int)(255*open)),false);
         boolean armed=android.os.SystemClock.uptimeMillis()<resetArmedUntil;
-        round(c,left,y+320*unit,right,y+352*unit,9*unit,alpha(armed?0xffe27878:0xff505365,(int)((armed?100:50)*open)));
-        text(c,armed?"Tap again to reset visual settings":"Reset visual settings",left+10*unit,y+341*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),armed);
+        round(c,left,y+352*unit,right,y+384*unit,9*unit,alpha(armed?0xffe27878:0xff505365,(int)((armed?100:50)*open)));
+        text(c,armed?"Tap again to reset visual settings":"Reset visual settings",left+10*unit,y+373*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),armed);
       } else if(tab==3){drawMods(c,ac);
       } else if(tab==5){drawButtonSettings(c,ac);
-      } else {text(c,"A little more you.",body+24*unit,y+92*unit,16*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"A smooth, customizable interface.",body+24*unit,y+117*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);text(c,"No gameplay features are included.",body+24*unit,y+138*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);if(motionMode>=3)text(c,motionMode==3?"Tap the bubbles to pop them.":motionMode==4?"Draw a fading trail with your finger.":"Touch and drag to attract the sparks.",body+24*unit,y+170*unit,10*unit,alpha(ac,(int)(240*open)),false);}
+      } else {text(c,"A little more you.",body+24*unit,y+92*unit,16*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"A smooth, customizable interface.",body+24*unit,y+117*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);text(c,"No gameplay features are included.",body+24*unit,y+138*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);if(motionMode>=3)text(c,motionMode==3?"Tap the bubbles to pop them.":motionMode==4?"Draw a fading trail with your finger.":"Hold to gather the sparks; release to scatter them.",body+24*unit,y+170*unit,10*unit,alpha(ac,(int)(240*open)),false);}
       c.restore();
       if(touchRipple&&tapAge<1f){c.save();Path clip=new Path();clip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(clip);
         float life=1f-tapAge;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((1.1f+life)*unit);p.setColor(alpha(ac,(int)(120*life*open)));c.drawCircle(tapX,tapY,(5+28*tapAge)*unit,p);
@@ -419,15 +423,28 @@ public final class LumaUI {
     void drawBackground(Canvas c,int mode,float fade){
         int effect=palette[2]; float seconds=phaseTime;
         if(mode==1){
-          for(int i=0;i<13;i++){
-            float phase=i*1.73f, radius=(5+(i%4)*4)*unit;
-            float bx=x+side+(w-side)*(.07f+((i*37)%86)/100f)+(float)Math.sin(seconds*.6f+phase)*9*unit;
-            float travel=(seconds*(8+i%4)*unit+i*47*unit)%(h+2*radius);
-            float by=y+h+radius-travel;
-            float stretch=1.05f+.35f*(.5f+.5f*(float)Math.sin(seconds*1.8f+phase));
-            RectF oval=new RectF(bx-radius/stretch,by-radius*stretch,bx+radius/stretch,by+radius*stretch);
-            p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)((12+(i%3)*6)*fade)));c.drawOval(oval,p);
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(effect,(int)(38*fade)));c.drawOval(oval,p);
+          float bw=w-side;
+          for(int i=0;i<LavaMotion.COUNT;i++)LavaMotion.sample(i,seconds,lavaShapes[i]);
+          // Soft bridges narrow between nearby shapes, then dissolve as they drift apart.
+          p.setStyle(Paint.Style.FILL);
+          for(int i=0;i<LavaMotion.COUNT;i++)for(int j=i+1;j<LavaMotion.COUNT;j++){
+            float[] a=lavaShapes[i],b=lavaShapes[j];float ax=body+a[0]*bw,ay=y+a[1]*h,bx=body+b[0]*bw,by=y+b[1]*h;
+            float dx=bx-ax,dy=by-ay,dist=(float)Math.sqrt(dx*dx+dy*dy);float reach=(a[2]+b[2])*h*2.5f;
+            if(dist<1||dist>=reach)continue;float fadeBridge=Math.max(0,Math.min(1,(reach-dist)/(reach*.36f)));
+            float nx=-dy/dist,ny=dx/dist,ra=a[2]*h*.7f,rb=b[2]*h*.7f,mx=(ax+bx)*.5f,my=(ay+by)*.5f,neck=Math.min(ra,rb)*.25f;
+            Path bridge=new Path();bridge.moveTo(ax+nx*ra,ay+ny*ra);bridge.quadTo(mx+nx*neck,my+ny*neck,bx+nx*rb,by+ny*rb);
+            bridge.lineTo(bx-nx*rb,by-ny*rb);bridge.quadTo(mx-nx*neck,my-ny*neck,ax-nx*ra,ay-ny*ra);bridge.close();
+            p.setColor(alpha(effect,(int)(28*fade*fadeBridge)));c.drawPath(bridge,p);
+          }
+          for(int i=0;i<LavaMotion.COUNT;i++){
+            float[] a=lavaShapes[i];float cx=body+a[0]*bw,cy=y+a[1]*h,rx=a[2]*h,ry=a[3]*h,skew=a[4];
+            Path blob=new Path();blob.moveTo(cx,cy-ry);
+            blob.cubicTo(cx+rx*(.62f+skew),cy-ry,cx+rx,cy-ry*.55f,cx+rx,cy);
+            blob.cubicTo(cx+rx,cy+ry*.58f,cx+rx*(.58f-skew),cy+ry,cx,cy+ry);
+            blob.cubicTo(cx-rx*(.62f+skew),cy+ry,cx-rx,cy+ry*.52f,cx-rx,cy);
+            blob.cubicTo(cx-rx,cy-ry*.56f,cx-rx*(.58f-skew),cy-ry,cx,cy-ry);blob.close();
+            p.setStyle(Paint.Style.FILL);p.setColor(alpha(effect,(int)((28+i%3*8)*fade)));c.drawPath(blob,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(unit);p.setColor(alpha(effect,(int)(64*fade)));c.drawPath(blob,p);
           }
         } else if(mode==2) {
           for(int i=0;i<48;i++){
@@ -536,9 +553,10 @@ public final class LumaUI {
       if(motionMode>=3){PlayField playField=playFields[motionMode-3];boolean inside=px>=body&&px<=x+w&&py>=y&&py<=y+h;
         if((act==MotionEvent.ACTION_DOWN&&inside)||(act==MotionEvent.ACTION_MOVE&&playField.pressed)){
           float bw=Math.max(1,x+w-body);playField.pointer((px-body)/bw,(py-y)/Math.max(1,h),true,motionMode,bw/Math.max(1,h));invalidate();
-        }else if(act==MotionEvent.ACTION_UP||act==MotionEvent.ACTION_CANCEL){playField.pressed=false;}}
+        }else if(act==MotionEvent.ACTION_UP){playField.pointer((px-body)/Math.max(1,x+w-body),(py-y)/Math.max(1,h),false,motionMode,(x+w-body)/Math.max(1,h));invalidate();}
+        else if(act==MotionEvent.ACTION_CANCEL){playField.pressed=false;}}
       if(act==MotionEvent.ACTION_DOWN&&touchRipple&&px>=x&&px<=x+w&&py>=y&&py<=y+h){tapX=px;tapY=py;tapAge=0;invalidate();}
-      if((act==MotionEvent.ACTION_DOWN||act==MotionEvent.ACTION_MOVE)&&px>=x&&px<=x+w&&py>=y&&py<=y+h){targetLightX=Math.max(.1f,Math.min(.9f,(px-x)/w));targetLightY=Math.max(.05f,Math.min(.8f,(py-y)/h));if(depthMode!=0)invalidate();}
+      if(glowFollow&&(act==MotionEvent.ACTION_DOWN||act==MotionEvent.ACTION_MOVE)&&px>=x&&px<=x+w&&py>=y&&py<=y+h){targetLightX=Math.max(.1f,Math.min(.9f,(px-x)/w));targetLightY=Math.max(.05f,Math.min(.8f,(py-y)/h));if(depthMode!=0)invalidate();}
       if(act==MotionEvent.ACTION_UP||act==MotionEvent.ACTION_CANCEL){targetLightX=.82f;targetLightY=.12f;if(depthMode!=0)invalidate();}
       if(modGesture){
         if(modVelocity!=null)modVelocity.addMovement(e);
@@ -570,8 +588,9 @@ public final class LumaUI {
         if(tab==1&&px>=left&&px<=right&&py>=y+301*unit&&py<=y+337*unit){transitionStyle=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+358*unit&&py<=y+394*unit){depthMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==2&&px>=right-65*unit&&px<=right&&py>=y+178*unit&&py<=y+212*unit){touchRipple=!touchRipple;save();invalidate();return true;}
-        if(tab==2&&px>=left&&px<=right&&py>=y+247*unit&&py<=y+284*unit){smoothBackground=px>=left+(right-left)/2;save();invalidate();return true;}
-        if(tab==2&&px>=left&&px<=right&&py>=y+317*unit&&py<=y+356*unit){long now=android.os.SystemClock.uptimeMillis();if(now<resetArmedUntil)resetVisuals();else{resetArmedUntil=now+3000;postInvalidateDelayed(3050);invalidate();}return true;}
+        if(tab==2&&px>=right-65*unit&&px<=right&&py>=y+220*unit&&py<=y+253*unit){glowFollow=!glowFollow;if(!glowFollow){targetLightX=.82f;targetLightY=.12f;}save();invalidate();return true;}
+        if(tab==2&&px>=left&&px<=right&&py>=y+287*unit&&py<=y+324*unit){smoothBackground=px>=left+(right-left)/2;save();invalidate();return true;}
+        if(tab==2&&px>=left&&px<=right&&py>=y+349*unit&&py<=y+388*unit){long now=android.os.SystemClock.uptimeMillis();if(now<resetArmedUntil)resetVisuals();else{resetArmedUntil=now+3000;postInvalidateDelayed(3050);invalidate();}return true;}
         if(tab==0&&px>=left&&px<=right&&py>=y+71*unit&&py<=y+106*unit){save();loadColor(Math.min(2,(int)((px-left)/((right-left)/3))));for(int i=0;i<3;i++)shownValue[i]=target[i];invalidate();return true;}
         if(tab==0&&py>y+127*unit&&py<y+162*unit){int n=(int)((px-body-24*unit)/(34*unit));int[] colors={0xff9280ff,0xff54d7d2,0xfffd87a5,0xffffbe69,0xff12141f};if(n>=0&&n<5&&px>=body+24*unit){int col=colors[n];target[0]=Color.red(col)/255f;target[1]=Color.green(col)/255f;target[2]=Color.blue(col)/255f;save();invalidate();return true;}}
         if(px>=left-12*unit&&px<=right+12*unit){if(tab==0){for(int i=0;i<4;i++)if(Math.abs(py-(y+(197+i*51)*unit))<18*unit){active=i;break;}} else if(tab==1&&Math.abs(py-(y+176*unit))<18*unit)active=4;else if(tab==2&&Math.abs(py-(y+146*unit))<18*unit)active=5;}

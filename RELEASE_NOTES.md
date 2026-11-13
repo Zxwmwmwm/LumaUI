@@ -1,8 +1,9 @@
-## LumaUI 1.1.0 · Forming backgrounds & button animations
+## LumaUI 1.2.0 · Lava, Magnet & settings refinements
 
-- Backgrounds now cross-blend and gently form into view. Switching again during a transition starts from the current blend.
-- New **Button** tab: choose **Off**, **Portal**, **Pulse**, or **Orbit** for the floating button’s return after closing the menu. The portal opens, reveals the button, and fades away.
-- Choose the floating button’s size and icon; its position and settings are remembered. The return effect follows the animation-speed setting and Android’s system animation setting.
-- Search, favorites, interactive backgrounds, launcher mod controls, list layouts, settings, and menu transitions remain available.
+- Fixed Luma coloring on launcher settings categories after they are rebound; the settings sheet now applies the chosen accent and panel colors to categories, cards, sliders and supported controls. Category changes animate the content, and opening and closing animations are easier to see.
+- **Effects → Glow follows touch** can now be switched off without disabling the glow itself.
+- **Magnet** gathers the orbs while you hold, then scatters them outward when you release.
+- Redesigned **Stretch** as an evolving lava-lamp effect, with drifting, stretching blobs and soft connecting bridges.
+- Existing background transitions, floating-button styles, mod controls, search and favorites remain available.
 
-Versioning follows Minecraft-breaking compatibility changes / features / bug fixes: this feature update moves 1.0.1 to 1.1.0. Launcher integration uses internal APIs and can vary by launcher version. Android device testing is still recommended.
+This release includes new features, so it moves from 1.1.0 to 1.2.0 under the compatibility / features / bug fixes version scheme. The launcher’s native settings renderer varies by launcher version; actual device testing is recommended. Settings animations honor Android’s system animation setting.
