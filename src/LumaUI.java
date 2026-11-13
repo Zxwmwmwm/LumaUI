@@ -1,6 +1,8 @@
 package luma.ui;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
@@ -103,24 +105,30 @@ public final class LumaUI {
   private static final class Panel extends View {
     final Paint p=new Paint(3), meshPaint=new Paint(3); final SharedPreferences prefs;
     static final int MESH_X=40,MESH_Y=24;final float[] mesh=new float[(MESH_X+1)*(MESH_Y+1)*2]; Bitmap warpBitmap;
-    List<ModBridge.Row> modRows=new ArrayList<>(); boolean modPackages=false,modBusy=false,modReleased=false; int modPage=0,modRequest=0; String modStatus="";
+    List<ModBridge.Row> modRows=new ArrayList<>(); boolean modPackages=false,modBusy=false,modReleased=false,modSyncBusy=false; int modPage=0,modRequest=0; String modStatus="";
+    final ModPages modPages=new ModPages(); AlertDialog settingsDialog;
+    final Runnable syncRunnable=new Runnable(){public void run(){if(modReleased||!shown||tab!=3)return;
+      if(!modBusy){if(modPackages)refreshPackagesQuietly();else syncModuleRows();}postDelayed(this,modPackages?4000:1200);}};
     float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2;
     final TransitionMath.Spring spring=new TransitionMath.Spring(); float tapAge=1f,tapX,tapY; long resetArmedUntil;
     final int[] palette=new int[3]; float phaseTime=0, lightX=.82f, lightY=.12f, targetLightX=.82f, targetLightY=.12f;
     float[] target=new float[6], shownValue=new float[6];
     float x,y,w,h,side,body,unit,anchorX,anchorY,anchorWidth,anchorHeight; boolean haveAnchor; long last;
-    Panel(Context c){ super(c); setClickable(true); setLayerType(View.LAYER_TYPE_SOFTWARE,null); prefs=c.getSharedPreferences("lumaui_settings",0);
+    Panel(Context c){ super(c); setClickable(true); prefs=c.getSharedPreferences("lumaui_settings",0);
       palette[0]=prefs.getInt("accentColor",Color.rgb((int)(prefs.getFloat("red",.57f)*255),(int)(prefs.getFloat("green",.50f)*255),(int)(prefs.getFloat("blue",1f)*255)));
       palette[1]=prefs.getInt("panelColor",0xff12141f); palette[2]=prefs.getInt("effectColor",0xff9280ff);
       motionMode=Math.max(0,Math.min(2,prefs.getInt("motionMode",prefs.getBoolean("bubbles",true)?1:0)));
       transitionStyle=Math.max(0,Math.min(2,prefs.getInt("transitionStyle",prefs.getBoolean("portalTransition",true)?2:0)));
       depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));touchRipple=prefs.getBoolean("touchRipple",true);smoothBackground=prefs.getBoolean("smoothBackground",true);
+      tab=Math.max(0,Math.min(4,prefs.getInt("lastTab",0)));tabMotion=tab;modPackages=prefs.getBoolean("modPackages",false);
+      modPages.set(false,prefs.getInt("modulePage",0));modPages.set(true,prefs.getInt("packagePage",0));modPage=modPages.get(modPackages);
       loadColor(0);target[3]=prefs.getFloat("opacity",.92f);target[4]=prefs.getFloat("motion",.5f);target[5]=prefs.getFloat("glowStrength",.8f);System.arraycopy(target,0,shownValue,0,6);
     }
-    void release(){modReleased=true;modRequest++;if(warpBitmap!=null){warpBitmap.recycle();warpBitmap=null;}}
+    void recycleWarp(){if(warpBitmap!=null){warpBitmap.recycle();warpBitmap=null;}}
+    void release(){modReleased=true;modRequest++;removeCallbacks(syncRunnable);if(settingsDialog!=null)settingsDialog.dismiss();recycleWarp();}
     boolean prepareWarp(float width,float height){
       float factor=Math.min(1f,1536f/Math.max(width,height));int bw=Math.max(1,Math.round(width*factor)),bh=Math.max(1,Math.round(height*factor));
-      if(warpBitmap!=null&&(warpBitmap.getWidth()!=bw||warpBitmap.getHeight()!=bh))release();
+      if(warpBitmap!=null&&(warpBitmap.getWidth()!=bw||warpBitmap.getHeight()!=bh))recycleWarp();
       if(warpBitmap==null)try{warpBitmap=Bitmap.createBitmap(bw,bh,Bitmap.Config.ARGB_8888);}catch(OutOfMemoryError ignored){return false;}
       return true;
     }
@@ -130,7 +138,19 @@ public final class LumaUI {
       }
       target.drawBitmapMesh(warpBitmap,MESH_X,MESH_Y,mesh,0,null,0,meshPaint);
     }
-    void open(){shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.GONE);}setVisibility(View.VISIBLE);if(tab==3)refreshMods();invalidate();}
+    void open(){shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.GONE);}setVisibility(View.VISIBLE);if(tab==3){ensureMods();startSync();}invalidate();}
+    void ensureMods(){if(!modPackages&&!modRows.isEmpty()&&!modBusy)syncModuleRows();else refreshMods();}
+    void startSync(){removeCallbacks(syncRunnable);postDelayed(syncRunnable,1400);}
+    void saveModPage(){modPages.set(modPackages,modPage);prefs.edit().putInt(modPackages?"packagePage":"modulePage",modPage).apply();}
+    boolean syncModuleRows(){List<ModBridge.Row> fresh=ModBridge.syncModules(getContext(),modRows);if(fresh==null){modStatus="Live sync unavailable";invalidate();return false;}
+      boolean changed=false;for(int i=0;i<fresh.size();i++)if(fresh.get(i).enabled!=modRows.get(i).enabled){changed=true;break;}
+      if("Live sync unavailable".equals(modStatus)){modStatus="";changed=true;}
+      if(changed){modRows=fresh;invalidate();}return true;}
+    void refreshPackagesQuietly(){if(modSyncBusy)return;modSyncBusy=true;final int request=modRequest;new Thread(new Runnable(){public void run(){final ModBridge.Result result=ModBridge.packages();post(new Runnable(){public void run(){
+      modSyncBusy=false;if(modReleased||!shown||tab!=3||!modPackages||modBusy||request!=modRequest||!result.available)return;
+      boolean changed=result.rows.size()!=modRows.size();if(!changed)for(int i=0;i<modRows.size();i++){ModBridge.Row a=modRows.get(i),b=result.rows.get(i);if(!a.id.equals(b.id)||a.enabled!=b.enabled||!a.name.equals(b.name)){changed=true;break;}}
+      if(changed)applyMods(request,result);
+    }});}},"LumaUI-mod-sync").start();}
     void refreshMods(){
       final int request=++modRequest;modBusy=true;modStatus="Loading…";invalidate();
       if(!modPackages){applyMods(request,ModBridge.modules(getContext()));return;}
@@ -139,15 +159,31 @@ public final class LumaUI {
     void applyMods(int request,ModBridge.Result result){
       if(modReleased||request!=modRequest)return;modRows=result.rows;modBusy=false;
       modStatus=result.available?(result.partial?result.message:(modRows.isEmpty()?"Nothing to show yet":"")):result.message;
-      modPage=Math.max(0,Math.min(modPage,Math.max(0,(modRows.size()-1)/4)));
+      if(result.available){modPage=modPages.visible(modPackages,modRows.size());if(!result.partial)saveModPage();}
       setContentDescription("Mods. "+(modPackages?"Installed mods, changes apply next launch. ":"Live modules. ")+modRows.size()+" items. "+modStatus);invalidate();
     }
     void changeMod(final ModBridge.Row row){
       if(modBusy)return;modBusy=true;modStatus="Updating…";invalidate();final int request=++modRequest;
-      if(!row.packageMod){boolean ok=ModBridge.toggle(row);refreshMods();if(!ok){modStatus="Could not update module";announceForAccessibility(modStatus);}return;}
+      if(!row.packageMod){boolean ok=ModBridge.toggle(row);modBusy=false;modStatus=ok?"":"Could not update module";syncModuleRows();invalidate();if(!ok)announceForAccessibility(modStatus);return;}
       new Thread(new Runnable(){public void run(){final boolean ok=ModBridge.toggle(row);final ModBridge.Result result=ModBridge.packages();post(new Runnable(){public void run(){if(modReleased||request!=modRequest)return;applyMods(request,result);if(!ok){modStatus="Could not save change";invalidate();}announceForAccessibility(ok?"Saved for next launch":modStatus);}});}},"LumaUI-mod-toggle").start();
     }
-    void close(){shown=false;active=-1;invalidate();}
+    void openSettings(ModBridge.Row selected){
+      if(!selected.hasSettings||selected.packageMod)return;
+      // The launcher constructs config values on load; pick up edits made in its own menu.
+      ModBridge.Result latest=ModBridge.modules(getContext());ModBridge.Row found=null;
+      for(ModBridge.Row candidate:latest.rows)if(candidate.id.equals(selected.id)&&candidate.source.equals(selected.source)){found=candidate;break;}
+      if(found==null){modStatus="Settings unavailable in this launcher";invalidate();return;}
+      final ModBridge.Row row=found;
+      try{
+        if(ModBridge.openCustomSettings(row)){close();return;}
+        final Activity activity=(Activity)getContext();final FrameLayout container=new FrameLayout(activity);
+        ModBridge.renderSettings(activity,container,row,new Runnable(){public void run(){ModBridge.applySettings(row.id);}});
+        settingsDialog=new AlertDialog.Builder(activity,AlertDialog.THEME_DEVICE_DEFAULT_DARK).setTitle(row.name+" settings").setView(container).setPositiveButton("Done",null).create();
+        settingsDialog.setOnDismissListener(new DialogInterface.OnDismissListener(){public void onDismiss(DialogInterface dialog){ModBridge.stopSettings(container);settingsDialog=null;if(!modReleased&&shown&&tab==3)syncModuleRows();}});
+        settingsDialog.show();if(settingsDialog.getWindow()!=null){android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();settingsDialog.getWindow().setLayout(Math.min(metrics.widthPixels-dp(activity,30),dp(activity,700)),Math.min(metrics.heightPixels-dp(activity,30),dp(activity,550)));}
+      }catch(Throwable e){modStatus="Settings unavailable in this launcher";announceForAccessibility(modStatus);invalidate();}
+    }
+    void close(){shown=false;active=-1;removeCallbacks(syncRunnable);invalidate();}
     void loadColor(int slot){colorSlot=slot;int color=palette[slot];target[0]=Color.red(color)/255f;target[1]=Color.green(color)/255f;target[2]=Color.blue(color)/255f;}
     void recordColor(){palette[colorSlot]=Color.rgb((int)(target[0]*255),(int)(target[1]*255),(int)(target[2]*255));}
     void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putFloat("glowStrength",target[5]).apply();if(bubble!=null)bubble.invalidate();}
@@ -161,9 +197,9 @@ public final class LumaUI {
       int layers=depthMode==2?5:2;
       for(int i=layers;i>0;i--){float offset=i*(depthMode==2?1.6f:1.1f)*unit;
         round(c,x+offset*.35f,y+offset,x+w-offset*.35f,y+h+offset,20*unit,alpha(0xff03040a,(int)((26+i*6)*open)));}
-      p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xff0a0a18,(int)(110*open)));
-      p.setShadowLayer((depthMode==2?22:11)*unit,0,(depthMode==2?8:4)*unit,alpha(ac,(int)((depthMode==2?60:30)*shownValue[5]*open)));
-      c.drawRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,p);p.clearShadowLayer();
+      // Layered translucent geometry gives depth without an expensive full-panel blur.
+      p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xff0a0a18,(int)(90*open)));
+      c.drawRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,p);
     }
     void depthLight(Canvas c,int ac){
       if(depthMode==0)return;
@@ -261,7 +297,7 @@ public final class LumaUI {
       round(c,x+w-48*unit,y+14*unit,x+w-15*unit,y+47*unit,10*unit,alpha(0xff777b94,(int)(38*open)));
       text(c,"×",x+w-36*unit,y+38*unit,25*unit,alpha(0xffe5e6f2,(int)(255*open)),false);
       float transition=1f-Math.min(.75f,Math.abs(tab-tabMotion)*.65f);
-      c.saveLayerAlpha(body,y,x+w,y+h,(int)(255*transition),Canvas.ALL_SAVE_FLAG);
+      if(transition<.995f)c.saveLayerAlpha(body,y,x+w,y+h,(int)(255*transition),Canvas.ALL_SAVE_FLAG);else c.save();
       c.translate((tabMotion-tab)*8*unit,0);
       if(tab==0){text(c,"MAKE IT YOURS",body+24*unit,y+61*unit,9*unit,alpha(ac,(int)(255*open)),true);
         float segLeft=body+24*unit,segW=(x+w-32*unit-segLeft)/3f;
@@ -321,9 +357,10 @@ public final class LumaUI {
         ModBridge.Row row=modRows.get(start+i);float top=y+(153+i*52)*unit;
         round(c,left,top,right,top+46*unit,10*unit,alpha(row.enabled?0xff35304d:0xff242632,(int)(185*open)));
         round(c,left+7*unit,top+9*unit,left+10*unit,top+37*unit,2*unit,alpha(row.enabled?ac:0xff777b8b,(int)(230*open)));
-        c.save();c.clipRect(left+15*unit,top,right-82*unit,top+46*unit);
+        c.save();c.clipRect(left+15*unit,top,right-(row.hasSettings?126:82)*unit,top+46*unit);
         text(c,row.name,left+17*unit,top+19*unit,12*unit,alpha(0xfff3f2fa,(int)(255*open)),true);
         text(c,row.packageMod?"INSTALLED · NEXT LAUNCH":row.group,left+17*unit,top+35*unit,9*unit,alpha(0xffafb0c3,(int)(255*open)),false);c.restore();
+        if(row.hasSettings){round(c,right-114*unit,top+7*unit,right-74*unit,top+39*unit,8*unit,alpha(0xff6e7187,(int)(75*open)));text(c,"⚙",right-104*unit,top+30*unit,18*unit,alpha(0xfff2f1ff,(int)(255*open)),true);}
         round(c,right-68*unit,top+10*unit,right-8*unit,top+36*unit,8*unit,alpha(row.enabled?ac:0xff606473,(int)((row.enabled?160:95)*open)));
         text(c,row.enabled?"ON":"OFF",right-50*unit,top+28*unit,10*unit,alpha(Color.WHITE,(int)(255*open)),true);
       }
@@ -338,11 +375,11 @@ public final class LumaUI {
       if(act==MotionEvent.ACTION_DOWN&&touchRipple&&px>=x&&px<=x+w&&py>=y&&py<=y+h){tapX=px;tapY=py;tapAge=0;invalidate();}
       if((act==MotionEvent.ACTION_DOWN||act==MotionEvent.ACTION_MOVE)&&px>=x&&px<=x+w&&py>=y&&py<=y+h){targetLightX=Math.max(.1f,Math.min(.9f,(px-x)/w));targetLightY=Math.max(.05f,Math.min(.8f,(py-y)/h));if(depthMode!=0)invalidate();}
       if(act==MotionEvent.ACTION_UP||act==MotionEvent.ACTION_CANCEL){targetLightX=.82f;targetLightY=.12f;if(depthMode!=0)invalidate();}
-      if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+303*unit){int newTab=Math.min(4,(int)((py-y-83*unit)/(44*unit)));if(newTab!=tab){tab=newTab;if(tab==3){modPage=0;refreshMods();}}invalidate();return true;}
+      if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+303*unit){int newTab=Math.min(4,(int)((py-y-83*unit)/(44*unit)));if(newTab!=tab){tab=newTab;prefs.edit().putInt("lastTab",tab).apply();removeCallbacks(syncRunnable);if(tab==3){ensureMods();startSync();}}invalidate();return true;}
         if(tab==3&&px>=left&&px<=right){
-          if(py>=y+74*unit&&py<=y+107*unit){boolean selection=px>=left+(right-left)/2; if(selection!=modPackages){modPackages=selection;modPage=0;modRows=new ArrayList<>();refreshMods();}return true;}
-          if(py>=y+153*unit&&py<y+361*unit&&!modBusy){int relative=(int)((py-y-153*unit)/(52*unit));float within=(py-y-153*unit)-relative*52*unit;int index=modPage*4+relative;if(within<=46*unit&&index<modRows.size())changeMod(modRows.get(index));return true;}
-          if(py>=y+367*unit&&py<=y+399*unit){if(px>=right-135*unit&&px<right-73*unit)modPage=Math.max(0,modPage-1);else if(px>=right-68*unit)modPage=Math.min(Math.max(0,(modRows.size()-1)/4),modPage+1);invalidate();return true;}
+          if(py>=y+74*unit&&py<=y+107*unit){boolean selection=px>=left+(right-left)/2; if(selection!=modPackages){saveModPage();modPackages=selection;prefs.edit().putBoolean("modPackages",selection).apply();modPage=modPages.get(selection);modRows=new ArrayList<>();refreshMods();}return true;}
+          if(py>=y+153*unit&&py<y+361*unit&&!modBusy){int relative=(int)((py-y-153*unit)/(52*unit));float within=(py-y-153*unit)-relative*52*unit;int index=modPage*4+relative;if(within<=46*unit&&index<modRows.size()){if(!modPackages&&!syncModuleRows()){refreshMods();return true;}ModBridge.Row row=modRows.get(index);if(row.hasSettings&&px>=right-120*unit&&px<right-70*unit)openSettings(row);else changeMod(row);}return true;}
+          if(py>=y+367*unit&&py<=y+399*unit){if(px>=right-135*unit&&px<right-73*unit)modPage=Math.max(0,modPage-1);else if(px>=right-68*unit)modPage=Math.min(Math.max(0,(modRows.size()-1)/4),modPage+1);saveModPage();invalidate();return true;}
         }
         if(tab==1&&px>=left&&px<=right&&py>=y+232*unit&&py<=y+274*unit){motionMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+301*unit&&py<=y+337*unit){transitionStyle=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}

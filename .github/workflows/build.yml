@@ -53,4 +53,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/LumaUI.levipack --verify-tag --latest --title "LumaUI 1.0.1 · Mods Menu" --notes-file RELEASE_NOTES.md
+        run: gh release create "$GITHUB_REF_NAME" artifacts/LumaUI.levipack --verify-tag --latest --title "LumaUI 1.0.1 · Menu Refinements" --notes-file RELEASE_NOTES.md

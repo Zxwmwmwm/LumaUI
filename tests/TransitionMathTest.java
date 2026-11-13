@@ -26,6 +26,16 @@ public final class TransitionMathTest {
     }
     float[] nearPoint=new float[2],farPoint=new float[2];TransitionMath.warpPoint(100,0,0,0,800,440,.5f,nearPoint,0);TransitionMath.warpPoint(800,0,0,0,800,440,.5f,farPoint,0);
     if(nearPoint[0]/100f>=farPoint[0]/800f)throw new AssertionError("warp must bend, not just scale");
+    // A noticeably curved funnel while retaining positive mesh orientation.
+    TransitionMath.warpPoint(100,0,0,0,800,440,.5f,point,0);if(point[1]<8f)throw new AssertionError("bend too subtle");
+    for(float ax:new float[]{0,400,800})for(float ay:new float[]{0,220,440})for(float progress:new float[]{.05f,.2f,.5f,.8f,.95f}){
+      float[] a=new float[2],b=new float[2],c=new float[2];
+      for(int ix=0;ix<40;ix++)for(int iy=0;iy<24;iy++){
+        float px=ix*20f,py=iy*440f/24f;
+        TransitionMath.warpPoint(px,py,ax,ay,800,440,progress,a,0);TransitionMath.warpPoint(px+20,py,ax,ay,800,440,progress,b,0);TransitionMath.warpPoint(px,py+440f/24f,ax,ay,800,440,progress,c,0);
+        if((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])<=0)throw new AssertionError("folded mesh");
+      }
+    }
     for(float speed:new float[]{0f,.5f,1f}){
       TransitionMath.Spring s=new TransitionMath.Spring();float last=0;
       for(int i=0;i<180;i++){float v=s.step(1f,1f/60f,speed);if(v<last-.0001f||v<0||v>1)throw new AssertionError("open");last=v;}

@@ -26,8 +26,8 @@ final class TransitionMath {
     float farY=Math.max(Math.abs(anchorY),Math.abs(height-anchorY));
     float max=(float)Math.sqrt(farX*farX+farY*farY);
     float distance=max>0?clamp((float)Math.sqrt(vx*vx+vy*vy)/max):0f;
-    float bend=(1f-distance)*(1f-p),scale=p*(1f-.72f*bend);
-    float swirl=.13f*p*bend;
+    float bend=(1f-distance)*(1f-p),scale=p*(1f-.92f*bend);
+    float swirl=.48f*p*bend;
     result[at]=anchorX+vx*scale-vy*swirl;result[at+1]=anchorY+vy*scale+vx*swirl;
   }
   static final class Spring {

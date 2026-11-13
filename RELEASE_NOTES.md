@@ -1,8 +1,9 @@
-## LumaUI 1.0.1 · Mods Menu
+## LumaUI 1.0.1 · Menu refinements
 
-- Browse and toggle launcher modules live in the new Mods tab.
-- Manage installed mods separately; changes apply on the next Minecraft launch.
-- Elastic now bends and funnels the interface into the floating button like a black hole.
-- Includes the existing visual customization, animated backgrounds, and draggable button.
+- Smoother interaction with less repeated work and hardware-accelerated panel drawing.
+- Stronger bending and stretching for the Elastic transition.
+- Open available module settings with the gear button.
+- The selected tab and each mod list’s page are remembered.
+- Module switches sync with LeviLauncher; installed-mod switches apply on the next Minecraft launch.
 
-Launcher mod controls use internal launcher APIs, so availability can vary between launcher versions.
+Module settings and synchronization use launcher internal APIs and may vary between launcher versions.

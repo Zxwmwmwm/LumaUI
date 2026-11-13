@@ -13,8 +13,9 @@ import java.util.List;
 final class ModBridge {
   private static final String ROOT="org.levimc.launcher.core.mods.";
   static final class Row {
-    final String id,name,group; final boolean enabled,packageMod; final Object handle;
-    Row(String id,String name,String group,boolean enabled,boolean packageMod,Object handle){this.id=id;this.name=name;this.group=group;this.enabled=enabled;this.packageMod=packageMod;this.handle=handle;}
+    final String id,name,group,source; final boolean enabled,packageMod,hasSettings; final Object handle;
+    Row(String id,String name,String group,boolean enabled,boolean packageMod,boolean hasSettings,String source,Object handle){this.id=id;this.name=name;this.group=group;this.enabled=enabled;this.packageMod=packageMod;this.hasSettings=hasSettings;this.source=source;this.handle=handle;}
+    Row withEnabled(boolean value){return new Row(id,name,group,value,packageMod,hasSettings,source,handle);}
   }
   static final class Result {
     final List<Row> rows=new ArrayList<>(); boolean available; boolean partial; String message="";
@@ -28,19 +29,40 @@ final class ModBridge {
       Object result=provider.getMethod("load",activityClass).invoke(null,activity);if(!(result instanceof List))throw new IllegalStateException("Not a module list");
       for(Object mod:(List<?>)result){if(mod==null)continue;String id=text(call(mod,"getId"),"");if(id.isEmpty())continue;
         String title=text(call(mod,"getName"),id),group=text(call(mod,"getGroupName"),"Module");
-        out.rows.add(new Row(id,title,group,Boolean.TRUE.equals(call(mod,"isEnabled")),false,mod));}
+        out.rows.add(new Row(id,title,group,Boolean.TRUE.equals(call(mod,"isEnabled")),false,Boolean.TRUE.equals(call(mod,"hasConfig")),text(call(mod,"getSource"),""),mod));}
       out.available=true;
     }catch(Throwable e){out.partial=true;}
     if(!out.available)out.message="Launcher module menu unavailable";else if(out.partial)out.message="Some modules unavailable";
     return out;
   }
+  // Read the launcher's authoritative live state without rebuilding config schemas.
+  static List<Row> syncModules(Object activity,List<Row> rows){
+    try{
+      Class<?> overlay=Class.forName(ROOT+"inbuilt.overlay.InbuiltOverlayManager");Object instance=overlay.getMethod("getInstance").invoke(null);
+      Class<?> managers=Class.forName(ROOT+"inbuilt.manager.InbuiltModManager");Class<?> context=Class.forName("android.content.Context");
+      Object manager=managers.getMethod("getInstance",context).invoke(null,activity);
+      Method inbuilt=overlay.getMethod("isModActive",String.class),external=managers.getMethod("resolveExternalModuleEnabled",String.class,boolean.class);
+      List<Row> updated=new ArrayList<>();for(Row row:rows){boolean enabled=row.enabled;
+        if("INBUILT".equals(row.source)&&instance!=null)enabled=Boolean.TRUE.equals(inbuilt.invoke(instance,row.id));
+        else if("EXTERNAL".equals(row.source))enabled=Boolean.TRUE.equals(external.invoke(manager,row.id,row.enabled));
+        updated.add(row.withEnabled(enabled));
+      }return updated;
+    }catch(Throwable ignored){return null;}
+  }
+  static boolean openCustomSettings(Row row)throws Exception{return Boolean.TRUE.equals(call(row.handle,"openCustomConfig"));}
+  static void renderSettings(Object context,Object container,Row row,Runnable changed)throws Exception{
+    Class<?> type=Class.forName(ROOT+"inbuilt.overlay.ModConfigView"),contextClass=Class.forName("android.content.Context"),viewGroup=Class.forName("android.view.ViewGroup"),modClass=Class.forName(ROOT+"inbuilt.UnifiedMod");
+    type.getMethod("render",contextClass,viewGroup,modClass,boolean.class,Runnable.class).invoke(null,context,container,row.handle,false,changed);
+  }
+  static void stopSettings(Object container){try{Class<?> type=Class.forName(ROOT+"inbuilt.overlay.RuntimeConfigView");Method m=type.getDeclaredMethod("stop",Class.forName("android.view.ViewGroup"));m.setAccessible(true);m.invoke(null,container);}catch(Throwable ignored){}}
+  static void applySettings(String id){try{Class<?> type=Class.forName(ROOT+"inbuilt.overlay.InbuiltOverlayManager");Object manager=type.getMethod("getInstance").invoke(null);if(manager!=null)type.getMethod("applyConfigurationChanges",String.class).invoke(manager,id);}catch(Throwable ignored){}}
   private static Object manager()throws Exception{return Class.forName(ROOT+"ModManager").getMethod("getInstance").invoke(null);}
   static Result packages(){
     Result out=new Result();try{
       Object manager=manager();if(call(manager,"getCurrentVersion")==null){out.message="Launcher mod list unavailable";return out;}
       Object list=call(manager,"getMods");if(!(list instanceof List))throw new IllegalStateException("Not a mod list");
       for(Object mod:(List<?>)list){if(mod==null)continue;String id=text(call(mod,"getId"),"");if(id.isEmpty())continue;
-        out.rows.add(new Row(id,text(call(mod,"getDisplayName"),id),"NEXT LAUNCH",Boolean.TRUE.equals(call(mod,"isEnabled")),true,manager));}
+        out.rows.add(new Row(id,text(call(mod,"getDisplayName"),id),"NEXT LAUNCH",Boolean.TRUE.equals(call(mod,"isEnabled")),true,false,"",manager));}
       out.available=true;
     }catch(Throwable e){out.message="Launcher mod list unavailable";}
     return out;
