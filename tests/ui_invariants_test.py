@@ -13,4 +13,8 @@ assert 'dispatchTouchEvent(MotionEvent event)' in sheet and 'super.dispatchTouch
 assert 'setClickable(false)' in sheet and 'animate&&!dialog.gestureActive' in sheet
 assert 'ValueAnimator.areAnimatorsEnabled()' in sheet and 'closeAnimated(true)' in sheet
 assert 'modLayout",selected' in s and 'saveModOffset()' in s and 'loadModOffset()' in s
-print('UI snapshot, settings animation and gesture lifecycle guards passed')
+assert 'if(filtering())return;modPages.set' in s and 'if(!filtering()&&modLayout!=0)' in s
+assert 'ModSearch.filter(allModRows' in s and 'ModBridge.syncModules(getContext(),allModRows)' in s
+assert '"Off","Stretch","Space","Pop","Trail","Magnet"' in s and 'playField.pointer(' in s
+assert 'playField.pressed=false' in s and 'else drawPlayField(c,effect)' in s
+print('UI snapshot, search, background and gesture lifecycle guards passed')

@@ -1,8 +1,8 @@
-## LumaUI 1.0.1 · Settings motion
+## LumaUI 1.0.1 · Search, favorites & interactive backgrounds
 
-- Added a smooth entrance and exit to the module settings sheet.
-- Settings content and newly displayed category cards animate into view.
-- Added lightweight accent touch feedback without replacing launcher controls or their handlers.
-- Settings animations use the configured LumaUI animation speed and respect Android’s animation setting. Touch feedback follows the Touch ripples option.
+- Search modules and installed mods by name, group, or ID.
+- Star favorites and switch to a favorites-only view. Module favorites sync with LeviLauncher; installed-mod favorites stay in LumaUI.
+- Three interactive backgrounds: pop bubbles, draw a fading trail, or attract sparks with your finger.
+- Existing animated backgrounds, layout choices, settings controls, and remembered unfiltered positions remain available.
 
-Some modules open their own custom editor instead of LumaUI’s settings sheet.
+Choose the interactive backgrounds under **Motion**. Touch or drag the panel to play; the About tab offers open space. Launcher integration uses internal APIs and can vary by launcher version.
