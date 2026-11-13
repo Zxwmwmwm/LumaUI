@@ -1,0 +1,56 @@
+name: Build and release
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run host tests
+        run: bash tests/run.sh
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK and NDK
+        run: sdkmanager 'ndk;28.2.13676358' 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build ARM64 mod
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
+          export R8_JAR="$ANDROID_HOME/build-tools/35.0.0/lib/d8.jar"
+          bash build.sh
+      - name: Validate package
+        run: |
+          unzip -t artifacts/LumaUI.levipack
+          "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h artifacts/libLumaUI.so | grep AArch64
+          python3 -c 'import json,zipfile; z=zipfile.ZipFile("artifacts/LumaUI.levipack"); assert set(z.namelist())=={"manifest.json","libLumaUI.so","LICENSE"}; m=json.loads(z.read("manifest.json")); assert m["entry"]=="libLumaUI.so" and m["version"]=="1.0.1"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LumaUI
+          path: artifacts/LumaUI.levipack
+          if-no-files-found: error
+          retention-days: 7
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: LumaUI
+          path: artifacts
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/LumaUI.levipack --verify-tag --latest --title "LumaUI 1.0.1 · Mods Menu" --notes-file RELEASE_NOTES.md

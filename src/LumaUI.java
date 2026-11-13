@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
+import android.graphics.Bitmap;
+import android.graphics.PorterDuff;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -20,8 +22,10 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.ArrayList;
 
-/** UI-only overlay. It never hooks Minecraft or modifies game state. */
+/** Overlay and controls for the launcher’s existing mods. */
 public final class LumaUI {
   private static final Handler MAIN = new Handler(Looper.getMainLooper());
   private static boolean enabled;
@@ -49,6 +53,7 @@ public final class LumaUI {
   public static void start() { MAIN.post(new Runnable(){ public void run(){ if (!enabled) { enabled=true; monitor.run(); } }}); }
   public static void stop() { MAIN.post(new Runnable(){ public void run(){ enabled=false; MAIN.removeCallbacks(monitor); detach(); }}); }
   private static void detach() {
+    if (panel != null) panel.release();
     if (root != null && root.getParent() instanceof ViewGroup) ((ViewGroup)root.getParent()).removeView(root);
     root=null; panel=null; bubble=null; attached=null;
   }
@@ -96,7 +101,9 @@ public final class LumaUI {
       p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(w*.025f);p.setColor((ac&0x00ffffff)|0xdd000000);c.drawCircle(w/2,h/2,w*.43f,p);p.setStyle(Paint.Style.FILL);p.setColor(-1);p.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));p.setTextSize(w*.40f);p.setTextAlign(Paint.Align.CENTER);c.drawText("L",w/2,h*.65f,p);}
   }
   private static final class Panel extends View {
-    final Paint p=new Paint(3); final SharedPreferences prefs;
+    final Paint p=new Paint(3), meshPaint=new Paint(3); final SharedPreferences prefs;
+    static final int MESH_X=40,MESH_Y=24;final float[] mesh=new float[(MESH_X+1)*(MESH_Y+1)*2]; Bitmap warpBitmap;
+    List<ModBridge.Row> modRows=new ArrayList<>(); boolean modPackages=false,modBusy=false,modReleased=false; int modPage=0,modRequest=0; String modStatus="";
     float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true; int tab=0, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2;
     final TransitionMath.Spring spring=new TransitionMath.Spring(); float tapAge=1f,tapX,tapY; long resetArmedUntil;
     final int[] palette=new int[3]; float phaseTime=0, lightX=.82f, lightY=.12f, targetLightX=.82f, targetLightY=.12f;
@@ -110,7 +117,36 @@ public final class LumaUI {
       depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));touchRipple=prefs.getBoolean("touchRipple",true);smoothBackground=prefs.getBoolean("smoothBackground",true);
       loadColor(0);target[3]=prefs.getFloat("opacity",.92f);target[4]=prefs.getFloat("motion",.5f);target[5]=prefs.getFloat("glowStrength",.8f);System.arraycopy(target,0,shownValue,0,6);
     }
-    void open(){shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.GONE);}setVisibility(View.VISIBLE);invalidate();}
+    void release(){modReleased=true;modRequest++;if(warpBitmap!=null){warpBitmap.recycle();warpBitmap=null;}}
+    boolean prepareWarp(float width,float height){
+      float factor=Math.min(1f,1536f/Math.max(width,height));int bw=Math.max(1,Math.round(width*factor)),bh=Math.max(1,Math.round(height*factor));
+      if(warpBitmap!=null&&(warpBitmap.getWidth()!=bw||warpBitmap.getHeight()!=bh))release();
+      if(warpBitmap==null)try{warpBitmap=Bitmap.createBitmap(bw,bh,Bitmap.Config.ARGB_8888);}catch(OutOfMemoryError ignored){return false;}
+      return true;
+    }
+    void drawWarp(Canvas target,float width,float height,float ax,float ay,float progress){
+      int i=0;for(int row=0;row<=MESH_Y;row++)for(int col=0;col<=MESH_X;col++){
+        TransitionMath.warpPoint(width*col/MESH_X,height*row/MESH_Y,ax,ay,width,height,progress,mesh,i);i+=2;
+      }
+      target.drawBitmapMesh(warpBitmap,MESH_X,MESH_Y,mesh,0,null,0,meshPaint);
+    }
+    void open(){shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.GONE);}setVisibility(View.VISIBLE);if(tab==3)refreshMods();invalidate();}
+    void refreshMods(){
+      final int request=++modRequest;modBusy=true;modStatus="Loading…";invalidate();
+      if(!modPackages){applyMods(request,ModBridge.modules(getContext()));return;}
+      new Thread(new Runnable(){public void run(){final ModBridge.Result r=ModBridge.packages();post(new Runnable(){public void run(){applyMods(request,r);}});}},"LumaUI-mod-list").start();
+    }
+    void applyMods(int request,ModBridge.Result result){
+      if(modReleased||request!=modRequest)return;modRows=result.rows;modBusy=false;
+      modStatus=result.available?(result.partial?result.message:(modRows.isEmpty()?"Nothing to show yet":"")):result.message;
+      modPage=Math.max(0,Math.min(modPage,Math.max(0,(modRows.size()-1)/4)));
+      setContentDescription("Mods. "+(modPackages?"Installed mods, changes apply next launch. ":"Live modules. ")+modRows.size()+" items. "+modStatus);invalidate();
+    }
+    void changeMod(final ModBridge.Row row){
+      if(modBusy)return;modBusy=true;modStatus="Updating…";invalidate();final int request=++modRequest;
+      if(!row.packageMod){boolean ok=ModBridge.toggle(row);refreshMods();if(!ok){modStatus="Could not update module";announceForAccessibility(modStatus);}return;}
+      new Thread(new Runnable(){public void run(){final boolean ok=ModBridge.toggle(row);final ModBridge.Result result=ModBridge.packages();post(new Runnable(){public void run(){if(modReleased||request!=modRequest)return;applyMods(request,result);if(!ok){modStatus="Could not save change";invalidate();}announceForAccessibility(ok?"Saved for next launch":modStatus);}});}},"LumaUI-mod-toggle").start();
+    }
     void close(){shown=false;active=-1;invalidate();}
     void loadColor(int slot){colorSlot=slot;int color=palette[slot];target[0]=Color.red(color)/255f;target[1]=Color.green(color)/255f;target[2]=Color.blue(color)/255f;}
     void recordColor(){palette[colorSlot]=Color.rgb((int)(target[0]*255),(int)(target[1]*255),(int)(target[2]*255));}
@@ -165,12 +201,14 @@ public final class LumaUI {
             p.setStrokeWidth((i==1?1.6f:.9f)*unit);p.setColor(alpha(ac,(int)(90*flash)));c.drawPath(trail,p);}}
         p.setStyle(Paint.Style.FILL);
       }
+      Canvas visible=c;boolean warped=transitionStyle==2&&open<.995f&&prepareWarp(W,H);
+      if(warped){c=new Canvas(warpBitmap);c.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR);c.scale((float)warpBitmap.getWidth()/W,(float)warpBitmap.getHeight()/H);}
       c.save();
-      if(transitionStyle!=0){float initial=TransitionMath.startScale(anchorWidth,anchorHeight,w,h);
+      if(transitionStyle!=0&&!warped){float initial=TransitionMath.startScale(anchorWidth,anchorHeight,w,h);
         float sx=TransitionMath.scale(initial,open),sy=sx;
         if(transitionStyle==2){boolean horizontal=Math.abs(originX-W/2)>=Math.abs(originY-H/2);sx=TransitionMath.elasticScale(initial,open,horizontal);sy=TransitionMath.elasticScale(initial,open,!horizontal);}
         c.translate(TransitionMath.offset(originX,W/2,open),TransitionMath.offset(originY,H/2,open));c.scale(sx,sy,W/2,H/2);}
-      else c.scale(.94f+.06f*open,.94f+.06f*open,W/2,H/2);
+      else if(transitionStyle==0)c.scale(.94f+.06f*open,.94f+.06f*open,W/2,H/2);
       depthShadow(c,ac);
       int bg=(int)((.68f+.31f*shownValue[3])*255*open);round(c,x,y,x+w,y+h,20*unit,Color.argb(bg,Color.red(palette[1]),Color.green(palette[1]),Color.blue(palette[1])));
       depthLight(c,ac);
@@ -216,10 +254,10 @@ public final class LumaUI {
       text(c,"LumaUI",x+57*unit,y+34*unit,19*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"YOUR SPACE",x+57*unit,y+48*unit,8*unit,alpha(0xffa7a8bd,(int)(220*open)),true);
       float menuY=y+83*unit; round(c,x+12*unit,menuY+tabMotion*44*unit,x+side-12*unit,menuY+37*unit+tabMotion*44*unit,10*unit,alpha(ac,(int)(45*open)));
       round(c,x+12*unit,menuY+tabMotion*44*unit+8*unit,x+15*unit,menuY+tabMotion*44*unit+29*unit,2*unit,alpha(ac,(int)(220*open)));
-      String[] tabs={"Appearance","Motion","Effects","About"}; for(int i=0;i<4;i++){int co=i==tab?0xfff5f4ff:0xff979aaa;text(c,tabs[i],x+24*unit,menuY+(i*44+24)*unit,13*unit,alpha(co,(int)(255*open)),i==tab);}
+      String[] tabs={"Appearance","Motion","Effects","Mods","About"}; for(int i=0;i<5;i++){int co=i==tab?0xfff5f4ff:0xff979aaa;text(c,tabs[i],x+24*unit,menuY+(i*44+24)*unit,13*unit,alpha(co,(int)(255*open)),i==tab);}
       text(c,"GUI ONLY  •  v1.0.1",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
       p.setColor(alpha(0xff6f7080,(int)(65*open)));p.setStrokeWidth(unit);c.drawLine(body,y+18*unit,body,y+h-18*unit,p);
-      text(c,tab==0?"Appearance":tab==1?"Motion":tab==2?"Effects":"About",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      text(c,tab==0?"Appearance":tab==1?"Motion":tab==2?"Effects":tab==3?"Mods":"About",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
       round(c,x+w-48*unit,y+14*unit,x+w-15*unit,y+47*unit,10*unit,alpha(0xff777b94,(int)(38*open)));
       text(c,"×",x+w-36*unit,y+38*unit,25*unit,alpha(0xffe5e6f2,(int)(255*open)),false);
       float transition=1f-Math.min(.75f,Math.abs(tab-tabMotion)*.65f);
@@ -256,12 +294,43 @@ public final class LumaUI {
         boolean armed=android.os.SystemClock.uptimeMillis()<resetArmedUntil;
         round(c,left,y+320*unit,right,y+352*unit,9*unit,alpha(armed?0xffe27878:0xff505365,(int)((armed?100:50)*open)));
         text(c,armed?"Tap again to reset visual settings":"Reset visual settings",left+10*unit,y+341*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),armed);
+      } else if(tab==3){drawMods(c,ac);
       } else {text(c,"A little more you.",body+24*unit,y+92*unit,16*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"A smooth, customizable interface.",body+24*unit,y+117*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);text(c,"No gameplay features are included.",body+24*unit,y+138*unit,11*unit,alpha(0xffa4a7bb,(int)(255*open)),false);}
       c.restore();
       if(touchRipple&&tapAge<1f){c.save();Path clip=new Path();clip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(clip);
         float life=1f-tapAge;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth((1.1f+life)*unit);p.setColor(alpha(ac,(int)(120*life*open)));c.drawCircle(tapX,tapY,(5+28*tapAge)*unit,p);
         p.setStyle(Paint.Style.FILL);p.setColor(alpha(ac,(int)(25*life*open)));c.drawCircle(tapX,tapY,(4+20*tapAge)*unit,p);c.restore();}
-      c.restore();if(anim)postInvalidateOnAnimation();else if(shown&&motionMode!=0){if(smoothBackground)postInvalidateOnAnimation();else postInvalidateDelayed(33);}else last=0;
+      c.restore();
+      if(warped){c=visible;drawWarp(c,W,H,originX,originY,open);float pull=4f*open*(1f-open);
+        p.setShader(new RadialGradient(originX,originY,Math.max(1f,31*unit),new int[]{alpha(0xff03040a,(int)(205*pull)),alpha(ac,(int)(100*pull)),0x00000000},null,Shader.TileMode.CLAMP));
+        p.setStyle(Paint.Style.FILL);c.drawCircle(originX,originY,31*unit,p);p.setShader(null);
+        p.setColor(alpha(0xff04040a,(int)(230*pull)));c.drawCircle(originX,originY,10*unit,p);
+      }
+      if(anim)postInvalidateOnAnimation();else if(shown&&motionMode!=0){if(smoothBackground)postInvalidateOnAnimation();else postInvalidateDelayed(33);}else last=0;
+    }
+    void drawMods(Canvas c,int ac){
+      float left=body+24*unit,right=x+w-32*unit,half=(right-left)/2f;
+      text(c,"YOUR LAUNCHER, YOUR WAY",left,y+61*unit,9*unit,alpha(ac,(int)(255*open)),true);
+      for(int i=0;i<2;i++){boolean selected=(i==1)==modPackages;float a=left+i*half;
+        round(c,a,y+74*unit,a+half-5*unit,y+107*unit,9*unit,alpha(selected?ac:0xff505365,(int)((selected?110:50)*open)));
+        text(c,i==0?"Modules · Live":"Installed · Next launch",a+9*unit,y+95*unit,10*unit,alpha(Color.WHITE,(int)(245*open)),selected);
+      }
+      text(c,modPackages?"Changes apply when Minecraft starts again.":"Changes apply to in-game modules now.",left,y+127*unit,10*unit,alpha(0xffb3b5c8,(int)(255*open)),false);
+      if(!modStatus.isEmpty())text(c,modStatus,left,y+145*unit,10*unit,alpha(0xffffca85,(int)(255*open)),false);
+      int start=modPage*4;for(int i=0;i<4&&start+i<modRows.size();i++){
+        ModBridge.Row row=modRows.get(start+i);float top=y+(153+i*52)*unit;
+        round(c,left,top,right,top+46*unit,10*unit,alpha(row.enabled?0xff35304d:0xff242632,(int)(185*open)));
+        round(c,left+7*unit,top+9*unit,left+10*unit,top+37*unit,2*unit,alpha(row.enabled?ac:0xff777b8b,(int)(230*open)));
+        c.save();c.clipRect(left+15*unit,top,right-82*unit,top+46*unit);
+        text(c,row.name,left+17*unit,top+19*unit,12*unit,alpha(0xfff3f2fa,(int)(255*open)),true);
+        text(c,row.packageMod?"INSTALLED · NEXT LAUNCH":row.group,left+17*unit,top+35*unit,9*unit,alpha(0xffafb0c3,(int)(255*open)),false);c.restore();
+        round(c,right-68*unit,top+10*unit,right-8*unit,top+36*unit,8*unit,alpha(row.enabled?ac:0xff606473,(int)((row.enabled?160:95)*open)));
+        text(c,row.enabled?"ON":"OFF",right-50*unit,top+28*unit,10*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      }
+      int pages=Math.max(1,(modRows.size()+3)/4);text(c,"Page "+(modPage+1)+" / "+pages,left,y+389*unit,10*unit,alpha(0xffbec0d1,(int)(255*open)),false);
+      round(c,right-135*unit,y+367*unit,right-73*unit,y+399*unit,8*unit,alpha(0xff616579,(int)(65*open)));
+      round(c,right-68*unit,y+367*unit,right,y+399*unit,8*unit,alpha(0xff616579,(int)(65*open)));
+      text(c,"‹ Prev",right-124*unit,y+388*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),false);text(c,"Next ›",right-55*unit,y+388*unit,10*unit,alpha(Color.WHITE,(int)(240*open)),false);
     }
     void slider(Canvas c,int i,float yy,float fade){String[] names={"Red","Green","Blue","Panel opacity","Animation speed","Glow intensity"};float left=body+24*unit,right=x+w-32*unit; text(c,names[i],left,yy,11*unit,alpha(0xffe4e5f0,(int)(255*fade)),true);text(c,""+Math.round(target[i]*100)+"%",right-30*unit,yy,10*unit,alpha(0xffa4a7bb,(int)(255*fade)),false);float sy=yy+13*unit;round(c,left,sy,right,sy+4*unit,3*unit,alpha(0xff525567,(int)(150*fade)));round(c,left,sy,left+(right-left)*shownValue[i],sy+4*unit,3*unit,alpha(accent(),(int)(255*fade)));p.setColor(alpha(0xffffffff,(int)(255*fade)));if(depthMode!=0)p.setShadowLayer(7*unit,0,0,alpha(accent(),(int)(125*shownValue[5]*fade)));c.drawCircle(left+(right-left)*shownValue[i],sy+2*unit,6*unit,p);p.clearShadowLayer();}
     public boolean onTouchEvent(MotionEvent e){float px=e.getX(),py=e.getY();int act=e.getActionMasked();float left=body+24*unit,right=x+w-32*unit;
@@ -269,7 +338,12 @@ public final class LumaUI {
       if(act==MotionEvent.ACTION_DOWN&&touchRipple&&px>=x&&px<=x+w&&py>=y&&py<=y+h){tapX=px;tapY=py;tapAge=0;invalidate();}
       if((act==MotionEvent.ACTION_DOWN||act==MotionEvent.ACTION_MOVE)&&px>=x&&px<=x+w&&py>=y&&py<=y+h){targetLightX=Math.max(.1f,Math.min(.9f,(px-x)/w));targetLightY=Math.max(.05f,Math.min(.8f,(py-y)/h));if(depthMode!=0)invalidate();}
       if(act==MotionEvent.ACTION_UP||act==MotionEvent.ACTION_CANCEL){targetLightX=.82f;targetLightY=.12f;if(depthMode!=0)invalidate();}
-      if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+259*unit){tab=Math.min(3,(int)((py-y-83*unit)/(44*unit)));invalidate();return true;}
+      if(act==MotionEvent.ACTION_DOWN){if(px>x+w-55*unit&&py>y&&py<y+55*unit){close();return true;} if(px<x||px>x+w||py<y||py>y+h){close();return true;}if(px>x+12*unit&&px<body-10*unit&&py>y+83*unit&&py<y+303*unit){int newTab=Math.min(4,(int)((py-y-83*unit)/(44*unit)));if(newTab!=tab){tab=newTab;if(tab==3){modPage=0;refreshMods();}}invalidate();return true;}
+        if(tab==3&&px>=left&&px<=right){
+          if(py>=y+74*unit&&py<=y+107*unit){boolean selection=px>=left+(right-left)/2; if(selection!=modPackages){modPackages=selection;modPage=0;modRows=new ArrayList<>();refreshMods();}return true;}
+          if(py>=y+153*unit&&py<y+361*unit&&!modBusy){int relative=(int)((py-y-153*unit)/(52*unit));float within=(py-y-153*unit)-relative*52*unit;int index=modPage*4+relative;if(within<=46*unit&&index<modRows.size())changeMod(modRows.get(index));return true;}
+          if(py>=y+367*unit&&py<=y+399*unit){if(px>=right-135*unit&&px<right-73*unit)modPage=Math.max(0,modPage-1);else if(px>=right-68*unit)modPage=Math.min(Math.max(0,(modRows.size()-1)/4),modPage+1);invalidate();return true;}
+        }
         if(tab==1&&px>=left&&px<=right&&py>=y+232*unit&&py<=y+274*unit){motionMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+301*unit&&py<=y+337*unit){transitionStyle=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}
         if(tab==1&&px>=left&&px<=right&&py>=y+358*unit&&py<=y+394*unit){depthMode=Math.min(2,(int)((px-left)/((right-left)/3)));save();invalidate();return true;}

@@ -18,6 +18,14 @@ public final class TransitionMathTest {
     near(TransitionMath.elasticScale(.05f,0,true),.05f);near(TransitionMath.elasticScale(.05f,1,true),1);
     near(TransitionMath.elasticScale(.05f,0,false),.05f);near(TransitionMath.elasticScale(.05f,1,false),1);
     if(TransitionMath.elasticScale(.05f,.5f,true)<=TransitionMath.elasticScale(.05f,.5f,false))throw new AssertionError("stretch");
+    float[] point=new float[2];
+    for(float ax:new float[]{0,120,800})for(float ay:new float[]{0,220,440})for(float px:new float[]{0,300,800})for(float py:new float[]{0,200,440}){
+      TransitionMath.warpPoint(px,py,ax,ay,800,440,0,point,0);near(point[0],ax);near(point[1],ay);
+      TransitionMath.warpPoint(px,py,ax,ay,800,440,1,point,0);near(point[0],px);near(point[1],py);
+      TransitionMath.warpPoint(px,py,ax,ay,800,440,.5f,point,0);if(!Float.isFinite(point[0])||!Float.isFinite(point[1]))throw new AssertionError("warp finite");
+    }
+    float[] nearPoint=new float[2],farPoint=new float[2];TransitionMath.warpPoint(100,0,0,0,800,440,.5f,nearPoint,0);TransitionMath.warpPoint(800,0,0,0,800,440,.5f,farPoint,0);
+    if(nearPoint[0]/100f>=farPoint[0]/800f)throw new AssertionError("warp must bend, not just scale");
     for(float speed:new float[]{0f,.5f,1f}){
       TransitionMath.Spring s=new TransitionMath.Spring();float last=0;
       for(int i=0;i<180;i++){float v=s.step(1f,1f/60f,speed);if(v<last-.0001f||v<0||v>1)throw new AssertionError("open");last=v;}

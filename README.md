@@ -8,7 +8,8 @@ LumaUI is a customizable GUI-only overlay for LeviLauncher on Android. Make the 
 
 ## Features
 
-- **Menu transitions:** choose **Fade**, **Portal**, or **Elastic** in **Motion**. Elastic stretches the interface out of the floating **L** button and draws it back in when closed. The button-to-menu effect can be turned off with Fade.
+- **Menu transitions:** choose **Fade**, **Portal**, or **Elastic** in **Motion**. Elastic bends the interface toward the floating **L** button, drawing it into a black-hole-like funnel when closed and unfurling it on opening. The button-to-menu effect can be turned off with Fade.
+- **Mods menu:** browse launcher modules and installed mods in separate paginated lists. Module switches use the launcher’s live controls; installed mod switches are saved for the next Minecraft launch (they do not unload a native library in the current session).
 - **Interface depth:** choose **Flat**, **Soft**, or **Deep** for layered shadows, accent glow, and a touch-reactive glass highlight.
 - **Animated backgrounds:** choose **Off**, **Stretch** for drifting elastic bubbles, or **Space** for stars, streaks, and a glowing black hole.
 - **Independent colors:** customize the accent, panel, and effects with presets or RGB sliders. Panel opacity is adjustable.
@@ -17,18 +18,19 @@ LumaUI is a customizable GUI-only overlay for LeviLauncher on Android. Make the 
 - **Reset visuals:** restore the visual defaults with a two-tap confirmation; the floating-button position is preserved.
 - **Draggable button:** move the floating button wherever it suits you; its position and your settings are saved.
 
-LumaUI is an interface-only mod. The translucent glass effect is a visual treatment rather than real-time background blur, and the mod does not change gameplay.
+LumaUI adds no gameplay features of its own. Its Mods tab controls existing launcher modules and installed mods. The translucent glass effect is a visual treatment rather than real-time background blur.
 
 ## Install and use
 
 1. Download `LumaUI.levipack` from the [latest release](https://github.com/Zxwmwmwm/LumaUI/releases/latest) and import it in LeviLauncher's mod manager.
 2. Enable LumaUI, start Minecraft, and tap the floating **L** button. Drag the button to reposition it.
 3. Open **Motion** to choose Fade, Portal, or Elastic, and adjust depth, animation speed, and the background theme. Use **Appearance** for colors and opacity, and **Effects** for glow, touch feedback, and frame pacing.
-4. Tap **×** or outside the interface to close it.
+4. Open **Mods** and choose **Modules** for live controls or **Installed** for next-launch controls. Use the page buttons to browse.
+5. Tap **×** or outside the interface to close it.
 
 ## Compatibility
 
-LumaUI targets Minecraft Bedrock 1.26.62 and 1.26.62.x on Android ARM64. Android 9 or newer is recommended; the launcher must provide its internal `InbuiltOverlayManager`. Lighter panel colors can reduce text contrast.
+LumaUI targets Minecraft Bedrock 1.26.62 and 1.26.62.x on Android ARM64. Android 9 or newer is recommended; the launcher must provide its internal `InbuiltOverlayManager`. The Mods tab uses launcher internal APIs; availability may vary with launcher versions, and the menu reports when a provider is unavailable. Lighter panel colors can reduce text contrast.
 
 ## Build
 
@@ -40,7 +42,7 @@ ANDROID_JAR=/path/to/android.jar \
 R8_JAR=/path/to/r8.jar bash build.sh
 ```
 
-The build creates `artifacts/libLumaUI.so` and `artifacts/LumaUI.levipack`. Run the transition geometry and spring checks with `bash tests/run.sh`.
+The build creates `artifacts/libLumaUI.so` and `artifacts/LumaUI.levipack`. Run the transition geometry, spring, and launcher-bridge facade checks with `bash tests/run.sh`.
 
 ## License
 

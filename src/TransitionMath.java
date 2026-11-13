@@ -18,6 +18,18 @@ final class TransitionMath {
     float p=clamp(progress), envelope=4f*p*(1f-p);
     return scale(start,p)*(stretchedAxis?1f+.42f*envelope:1f-.18f*envelope);
   }
+  // Radial, non-affine funnel: the side nearest the button is pulled in
+  // faster than the far edge. The small twist adds a black-hole bend.
+  static void warpPoint(float px,float py,float anchorX,float anchorY,float width,float height,float progress,float[] result,int at) {
+    float p=clamp(progress),vx=px-anchorX,vy=py-anchorY;
+    float farX=Math.max(Math.abs(anchorX),Math.abs(width-anchorX));
+    float farY=Math.max(Math.abs(anchorY),Math.abs(height-anchorY));
+    float max=(float)Math.sqrt(farX*farX+farY*farY);
+    float distance=max>0?clamp((float)Math.sqrt(vx*vx+vy*vy)/max):0f;
+    float bend=(1f-distance)*(1f-p),scale=p*(1f-.72f*bend);
+    float swirl=.13f*p*bend;
+    result[at]=anchorX+vx*scale-vy*swirl;result[at+1]=anchorY+vy*scale+vx*swirl;
+  }
   static final class Spring {
     private float value,velocity;
     void reset(float initial){value=clamp(initial);velocity=0f;}

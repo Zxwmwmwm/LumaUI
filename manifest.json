@@ -2,7 +2,7 @@
   "type": "preload-native",
   "name": "LumaUI",
   "author": "Zxwmwmwm",
-  "description": "A customizable GUI-only overlay with elastic button transitions, layered depth, and animated themes.",
+  "description": "A customizable overlay with launcher mod controls, black-hole elastic transitions, and animated themes.",
   "version": "1.0.1",
   "entry": "libLumaUI.so",
   "minecraft_versions": ["1.26.62", "1.26.62.*"]
