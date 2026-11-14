@@ -8,6 +8,8 @@ final class TransitionMath {
     if(density<=0f||width<=0f||height<=0f)return .1f;
     return Math.max(.01f,Math.min(density,Math.min(width/700f,height/420f)));
   }
+  static float scatterOffset(int key,float progress){float p=clamp(progress);float delayed=clamp((p-(key%3)*.045f)/.86f);float smooth=delayed*delayed*(3-2*delayed);return (1-smooth)*(float)Math.sin(key*2.399963f);}
+  static float snapshotMix(float progress){float t=clamp((progress-.88f)/.12f);return t*t*(3f-2f*t);}
   static float offset(float origin, float center, float progress) { return (origin-center)*(1f-clamp(progress)); }
   static float startScale(float bubbleWidth,float bubbleHeight,float menuWidth,float menuHeight) {
     if(bubbleWidth<=0f||bubbleHeight<=0f||menuWidth<=0f||menuHeight<=0f)return .08f;

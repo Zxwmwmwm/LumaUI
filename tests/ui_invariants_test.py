@@ -15,9 +15,9 @@ assert 'ValueAnimator.areAnimatorsEnabled()' in sheet and 'closeAnimated(true)' 
 assert 'modLayout",selected' in s and 'saveModOffset()' in s and 'loadModOffset()' in s
 assert 'if(filtering())return;modPages.set' in s and 'if(!filtering()&&modLayout!=0)' in s
 assert 'ModSearch.filter(allModRows' in s and 'ModBridge.syncModules(getContext(),allModRows)' in s
-assert '"Off","Stretch","Space","Pop","Trail","Magnet"' in s and 'playField.pointer(' in s
+assert '"Off","Lava Lamp","Space","Pop","Trail","Magnet"' in s and 'playField.pointer(' in s
 assert 'playField.pressed=false' in s and 'drawPlayField(c,effect,mode,fade)' in s
-assert 'finishBubbleEffect();recycleWarp();shown=true' in s and 'finishBubbleEffect();\n    if (panel != null)' in s
+assert 'finishBubbleEffect();recycleWarp();scatterSeed=' in s and 'hudEditor.close(false)' in s
 assert 'revealBubble(buttonReturn,target[4])' in s and 'setVisibility(View.INVISIBLE)' in s
 assert '"Off","Portal","Pulse","Orbit"' in s and 'putInt("buttonReturn",buttonReturn)' in s
 assert 'backgroundBlend.select(selected)' in s and 'backgroundBlend.step(dt,target[4])' in s
@@ -25,5 +25,10 @@ assert 'addOnPreDrawListener(styler)' in sheet and 'categories.get(view)!=view.g
 assert 'animateCategoryContent(list,duration)' in sheet and 'super.dispatchTouchEvent(event)' in sheet
 assert 'setTrackActiveTintList' in sheet and 'blend(panel,accent' in sheet
 assert 'putBoolean("glowFollow",glowFollow)' in s and 'if(glowFollow&&(act==' in s
-assert 'playField.pointer((px-body)' in s and 'LavaMotion.sample' in s
+assert 'playField.pointer((px-body)' in s and 'lava.render' in s
+assert 'if(!shown)return false;' in s and 'snapshotMix(open)' in s
+assert 'PixelCopy.request(surface' in Path('src/AdaptiveSampler.java').read_text()
+assert 'putBoolean("adaptiveColor",adaptiveColor)' in s and 'sampler.stop()' in s
+assert 'HudEditor.start(' in s and '"Mods","Appearance","Motion","Effects","HUD Editor"' in s
+assert '"Fade","Portal","Elastic","Scatter"' in s
 print('UI snapshot, search, background and gesture lifecycle guards passed')

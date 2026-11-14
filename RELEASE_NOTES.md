@@ -1,9 +1,9 @@
-## LumaUI 1.2.0 · Lava, Magnet & settings refinements
+## LumaUI 1.3.0 · Adaptive themes & HUD editor
 
-- Fixed Luma coloring on launcher settings categories after they are rebound; the settings sheet now applies the chosen accent and panel colors to categories, cards, sliders and supported controls. Category changes animate the content, and opening and closing animations are easier to see.
-- **Effects → Glow follows touch** can now be switched off without disabling the glow itself.
-- **Magnet** gathers the orbs while you hold, then scatters them outward when you release.
-- Redesigned **Stretch** as an evolving lava-lamp effect, with drifting, stretching blobs and soft connecting bridges.
-- Existing background transitions, floating-button styles, mod controls, search and favorites remain available.
+- **Adaptive panel:** optionally sample the game SurfaceView locally while the menu is open and smoothly tint the panel, accent and effects. No screen recording or upload; unavailable or protected surfaces fall back to manual colors. It estimates visible colors, not block identities.
+- **HUD Editor:** move and resize launcher-supported HUD elements using the launcher’s actual editing mode; drag Luma’s floating button too. Its position and launcher HUD changes are saved.
+- **Lava Lamp:** replaces Stretch with independently moving, rotating wax shapes, heat/cooling motion and soft metaball merging. Inspired by the lava-lamp example, independently implemented for Android Canvas.
+- **Motion:** Portal opens an expanding aperture, while new **Scatter** brings interface elements in from varied directions. Touch ripples now form organic water-like waves, with a brief control expansion. Floating-button returns have a softer scale.
+- **Fixes:** blend Elastic’s frozen transition snapshot into the live panel to reduce the end-of-opening jerk; pass touches through while closing rather than blocking gameplay until the animation finishes. Mods now appears first in the navigation. The gear sheet has a refreshed gradient, accent and header.
 
-This release includes new features, so it moves from 1.1.0 to 1.2.0 under the compatibility / features / bug fixes version scheme. The launcher’s native settings renderer varies by launcher version; actual device testing is recommended. Settings animations honor Android’s system animation setting.
+**Compatibility:** Adaptive color requires an accessible game SurfaceView; it may not work with every launcher, renderer or protected surface. HUD editing depends on the launcher’s internal APIs. These changes passed host tests and compile checks but have not been tested on an Android device.

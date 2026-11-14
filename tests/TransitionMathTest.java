@@ -14,6 +14,8 @@ public final class TransitionMathTest {
       near(center+TransitionMath.offset(origin,center,0),origin);near(center+TransitionMath.offset(origin,center,1),center);
       near(center+TransitionMath.offset(origin,center,.5f),(origin+center)/2f);
     }
+    for(int k=0;k<12;k++){near(TransitionMath.scatterOffset(k,1),0);if(!Float.isFinite(TransitionMath.scatterOffset(k,.4f)))throw new AssertionError("scatter");}
+    near(TransitionMath.snapshotMix(.88f),0);near(TransitionMath.snapshotMix(1),1);for(int i=0;i<100;i++){float a=TransitionMath.snapshotMix(i/100f),b=TransitionMath.snapshotMix((i+1)/100f);if(b<a||b-a>.14f)throw new AssertionError("snapshot blend discontinuity");}
     near(TransitionMath.scale(.05f,0),.05f);near(TransitionMath.scale(.05f,1),1);
     near(TransitionMath.elasticScale(.05f,0,true),.05f);near(TransitionMath.elasticScale(.05f,1,true),1);
     near(TransitionMath.elasticScale(.05f,0,false),.05f);near(TransitionMath.elasticScale(.05f,1,false),1);

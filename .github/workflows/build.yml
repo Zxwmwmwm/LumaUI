@@ -30,7 +30,7 @@ jobs:
         run: |
           unzip -t artifacts/LumaUI.levipack
           "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h artifacts/libLumaUI.so | grep AArch64
-          python3 -c 'import json,zipfile; z=zipfile.ZipFile("artifacts/LumaUI.levipack"); assert set(z.namelist())=={"manifest.json","libLumaUI.so","LICENSE"}; m=json.loads(z.read("manifest.json")); assert m["entry"]=="libLumaUI.so" and m["version"]=="1.2.0"'
+          python3 -c 'import json,zipfile; z=zipfile.ZipFile("artifacts/LumaUI.levipack"); assert set(z.namelist())=={"manifest.json","libLumaUI.so","LICENSE"}; m=json.loads(z.read("manifest.json")); assert m["entry"]=="libLumaUI.so" and m["version"]=="1.3.0"'
       - uses: actions/upload-artifact@v4
         with:
           name: LumaUI
@@ -53,4 +53,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/LumaUI.levipack --verify-tag --latest --title "LumaUI 1.2.0 · Lava, Magnet & Settings" --notes-file RELEASE_NOTES.md
+        run: gh release create "$GITHUB_REF_NAME" artifacts/LumaUI.levipack --verify-tag --latest --title "LumaUI 1.3.0 · Adaptive Themes & HUD Editor" --notes-file RELEASE_NOTES.md
