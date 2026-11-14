@@ -1,9 +1,9 @@
-## LumaUI 1.3.0 · Adaptive themes & HUD editor
+## LumaUI 1.4.0 · Spatial color & motion refinements
 
-- **Adaptive panel:** optionally sample the game SurfaceView locally while the menu is open and smoothly tint the panel, accent and effects. No screen recording or upload; unavailable or protected surfaces fall back to manual colors. It estimates visible colors, not block identities.
-- **HUD Editor:** move and resize launcher-supported HUD elements using the launcher’s actual editing mode; drag Luma’s floating button too. Its position and launcher HUD changes are saved.
-- **Lava Lamp:** replaces Stretch with independently moving, rotating wax shapes, heat/cooling motion and soft metaball merging. Inspired by the lava-lamp example, independently implemented for Android Canvas.
-- **Motion:** Portal opens an expanding aperture, while new **Scatter** brings interface elements in from varied directions. Touch ripples now form organic water-like waves, with a brief control expansion. Floating-button returns have a softer scale.
-- **Fixes:** blend Elastic’s frozen transition snapshot into the live panel to reduce the end-of-opening jerk; pass touches through while closing rather than blocking gameplay until the animation finishes. Mods now appears first in the navigation. The gear sheet has a refreshed gradient, accent and header.
+- **Spatial adaptive color:** the panel now samples a low-resolution grid behind its position, so differently colored parts of the background tint corresponding parts of the panel. The grid is blurred and smoothly transitions; accents still use the overall color.
+- **HUD editor:** moved the toolbar into a touchable, non-modal application panel above the game. Use − / + on the selected launcher HUD element, drag the toolbar title to move it, and tap Done to exit. The launcher’s own HUD elements remain draggable.
+- **Elastic opening:** keeps rendering the live panel through the opening instead of switching from a frozen mesh at the end; the opening stretch is monotonic. This targets the reported jerk.
+- **Press feedback:** choose **Off**, **Soft**, or **Water** under **Button → Button press feedback**. Controls compress or squash and rebound when pressed, including the complete mod toggle. This is separate from touch ripples.
+- **Scatter:** each opening picks fresh directions and staggered entrances. Text reveals letter by letter as sections and controls settle into place.
 
-**Compatibility:** Adaptive color requires an accessible game SurfaceView; it may not work with every launcher, renderer or protected surface. HUD editing depends on the launcher’s internal APIs. These changes passed host tests and compile checks but have not been tested on an Android device.
+Adaptive sampling needs a compatible, accessible game SurfaceView and uses no recording or upload; unsupported surfaces fall back to manual colors. HUD editing depends on launcher internal APIs. Build and host/facade tests passed, but Android device testing is still needed to verify window layering, sampling alignment and animation feel.

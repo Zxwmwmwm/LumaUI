@@ -3,7 +3,7 @@
   "name": "LumaUI",
   "author": "Zxwmwmwm",
   "description": "A customizable overlay with launcher mod controls, black-hole elastic transitions, and animated themes.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "entry": "libLumaUI.so",
   "minecraft_versions": ["1.26.62", "1.26.62.*"]
 }

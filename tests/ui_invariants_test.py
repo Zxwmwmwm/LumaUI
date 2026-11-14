@@ -31,4 +31,11 @@ assert 'PixelCopy.request(surface' in Path('src/AdaptiveSampler.java').read_text
 assert 'putBoolean("adaptiveColor",adaptiveColor)' in s and 'sampler.stop()' in s
 assert 'HudEditor.start(' in s and '"Mods","Appearance","Motion","Effects","HUD Editor"' in s
 assert '"Fade","Portal","Elastic","Scatter"' in s
+assert 'transitionStyle==2&&!shown&&open<1f' in s
+assert 'adaptiveGrid.accept(pixels)' in s and 'adaptiveBitmap,null,new RectF(x,y,x+w,y+h)' in s
+assert 'pressTransform(c,left,top,right,bottom)' in s and 'putInt("pressStyle",pressStyle)' in s
+assert 'scatterProgress=transitionStyle==3?0:1' in s and 'TransitionMath.visibleCharacters' in s
+hud=Path('src/HudEditor.java').read_text()
+assert 'TYPE_APPLICATION_PANEL' in hud and 'FLAG_NOT_TOUCH_MODAL' in hud and 'window.addView(tools,windowParams)' in hud
+assert 'window.removeViewImmediate(tools)' in hud
 print('UI snapshot, search, background and gesture lifecycle guards passed')

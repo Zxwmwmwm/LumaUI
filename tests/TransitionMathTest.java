@@ -9,12 +9,12 @@ public final class TransitionMathTest {
       float h=Math.min(screen[1]-24*u,440*u),w=Math.min(screen[0]-24*u,760*u);
       if(h<390*u||w<650*u)throw new AssertionError("controls clipped");
     }
-    for(int i=0;i<=100;i++){float p=i/100f,x=TransitionMath.elasticScale(.06f,p,true),y=TransitionMath.elasticScale(.06f,p,false);if(x<0||y<0||x>1.1f||y>1.1f)throw new AssertionError("elastic bounds");}
+    float prevX=0,prevY=0;for(int i=0;i<=100;i++){float p=i/100f,x=TransitionMath.elasticScale(.06f,p,true),y=TransitionMath.elasticScale(.06f,p,false);if(x<0||y<0||x>1||y>1||x<prevX||y<prevY)throw new AssertionError("elastic opening must be monotonic");prevX=x;prevY=y;}
     for(float origin:new float[]{0,48,320,1024})for(float center:new float[]{100,500}){
       near(center+TransitionMath.offset(origin,center,0),origin);near(center+TransitionMath.offset(origin,center,1),center);
       near(center+TransitionMath.offset(origin,center,.5f),(origin+center)/2f);
     }
-    for(int k=0;k<12;k++){near(TransitionMath.scatterOffset(k,1),0);if(!Float.isFinite(TransitionMath.scatterOffset(k,.4f)))throw new AssertionError("scatter");}
+    for(int k=0;k<12;k++){near(TransitionMath.scatterOffset(k,1),0);if(!Float.isFinite(TransitionMath.scatterOffset(k,.4f)))throw new AssertionError("scatter");int previous=0;float lastPhase=0;for(int t=0;t<=100;t++){float p=t/100f;int chars=TransitionMath.visibleCharacters(12,k,p,.3f);float phase=TransitionMath.scatterPhase(k,p,.3f);if(chars<previous||chars>12||phase<lastPhase||phase>1)throw new AssertionError("ordered reveal");previous=chars;lastPhase=phase;}if(previous!=12)throw new AssertionError("text incomplete");}
     near(TransitionMath.snapshotMix(.88f),0);near(TransitionMath.snapshotMix(1),1);for(int i=0;i<100;i++){float a=TransitionMath.snapshotMix(i/100f),b=TransitionMath.snapshotMix((i+1)/100f);if(b<a||b-a>.14f)throw new AssertionError("snapshot blend discontinuity");}
     near(TransitionMath.scale(.05f,0),.05f);near(TransitionMath.scale(.05f,1),1);
     near(TransitionMath.elasticScale(.05f,0,true),.05f);near(TransitionMath.elasticScale(.05f,1,true),1);

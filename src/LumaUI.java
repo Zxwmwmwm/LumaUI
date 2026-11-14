@@ -160,10 +160,10 @@ public final class LumaUI {
     final Map<String,Float> switchValues=new HashMap<>();
     final Runnable syncRunnable=new Runnable(){public void run(){if(modReleased||!shown||tab!=3)return;
       if(!modBusy){if(modPackages)refreshPackagesQuietly();else syncModuleRows();}postDelayed(this,modPackages?4000:1200);}};
-    float open=0, tabMotion=0; boolean shown=false, touchRipple=true, smoothBackground=true, glowFollow=true,adaptiveColor=false,adaptiveValid=false; int tab=3, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2,buttonReturn=1,buttonSize=1,buttonIcon=0;
-    final TransitionMath.Spring spring=new TransitionMath.Spring(); float tapAge=1f,tapX,tapY; long resetArmedUntil;
+    float open=0, tabMotion=0,scatterProgress=1; boolean shown=false, touchRipple=true, smoothBackground=true, glowFollow=true,adaptiveColor=false,adaptiveValid=false; int tab=3, active=-1, motionMode=1, colorSlot=0, depthMode=2, transitionStyle=2,buttonReturn=1,buttonSize=1,buttonIcon=0,pressStyle=2;
+    final TransitionMath.Spring spring=new TransitionMath.Spring();final PressMotion press=new PressMotion();boolean suppressPress; float tapAge=1f,tapX,tapY; long resetArmedUntil;
     final LavaField lava=new LavaField();final int[] lavaPixels=new int[112*64];Bitmap lavaBitmap;long lavaRendered;
-    AdaptiveSampler sampler;int adaptiveTargetPanel=0xff12141f,adaptiveTargetAccent=0xff9280ff,adaptivePanel=0xff12141f,adaptiveAccent=0xff9280ff;String adaptiveStatus="";final float[] adaptivePanelParts=new float[3],adaptiveAccentParts=new float[3];
+    AdaptiveSampler sampler;final AdaptiveGrid adaptiveGrid=new AdaptiveGrid();Bitmap adaptiveBitmap;int adaptiveTargetPanel=0xff12141f,adaptiveTargetAccent=0xff9280ff,adaptivePanel=0xff12141f,adaptiveAccent=0xff9280ff;String adaptiveStatus="";final float[] adaptivePanelParts=new float[3],adaptiveAccentParts=new float[3];
     final int[] palette=new int[3]; float phaseTime=0, lightX=.82f, lightY=.12f, targetLightX=.82f, targetLightY=.12f;
     float[] target=new float[6], shownValue=new float[6];
     float x,y,w,h,side,body,unit,anchorX,anchorY,anchorWidth,anchorHeight; boolean haveAnchor; long last;
@@ -173,7 +173,7 @@ public final class LumaUI {
       motionMode=Math.max(0,Math.min(5,prefs.getInt("motionMode",prefs.getBoolean("bubbles",true)?1:0)));backgroundBlend=new BackgroundBlend(motionMode);
       transitionStyle=Math.max(0,Math.min(3,prefs.getInt("transitionStyle",prefs.getBoolean("portalTransition",true)?2:0)));
       depthMode=Math.max(0,Math.min(2,prefs.getInt("depthMode",2)));touchRipple=prefs.getBoolean("touchRipple",true);smoothBackground=prefs.getBoolean("smoothBackground",true);glowFollow=prefs.getBoolean("glowFollow",true);adaptiveColor=prefs.getBoolean("adaptiveColor",false);
-      buttonReturn=Math.max(0,Math.min(3,prefs.getInt("buttonReturn",1)));buttonSize=Math.max(0,Math.min(2,prefs.getInt("buttonSize",1)));buttonIcon=Math.max(0,Math.min(2,prefs.getInt("buttonIcon",0)));
+      buttonReturn=Math.max(0,Math.min(3,prefs.getInt("buttonReturn",1)));buttonSize=Math.max(0,Math.min(2,prefs.getInt("buttonSize",1)));buttonIcon=Math.max(0,Math.min(2,prefs.getInt("buttonIcon",0)));pressStyle=Math.max(0,Math.min(2,prefs.getInt("pressStyle",2)));
       tab=Math.max(0,Math.min(6,prefs.getInt("lastTab",3)));tabMotion=navIndex(tab);modPackages=prefs.getBoolean("modPackages",false);
       modPages.set(false,prefs.getInt("modulePage",0));modPages.set(true,prefs.getInt("packagePage",0));modPage=modPages.get(modPackages);
       packageFavorites=new HashSet<>(prefs.getStringSet("packageFavorites",new HashSet<String>()));
@@ -194,7 +194,7 @@ public final class LumaUI {
       TransitionMath.warpMesh(width,height,ax,ay,progress,MESH_X,MESH_Y,mesh);
       target.drawBitmapMesh(warpBitmap,MESH_X,MESH_Y,mesh,0,null,0,meshPaint);
     }
-    void open(){finishBubbleEffect();recycleWarp();scatterSeed=(int)(android.os.SystemClock.uptimeMillis()%997);shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.INVISIBLE);}setVisibility(View.VISIBLE);startAdaptive();if(tab==3){ensureMods();startSync();}invalidate();}
+    void open(){finishBubbleEffect();recycleWarp();scatterSeed=(int)(android.os.SystemClock.uptimeMillis()%997);scatterProgress=transitionStyle==3?0:1;last=0;shown=true;if(bubble!=null){anchorWidth=bubble.getWidth();anchorHeight=bubble.getHeight();anchorX=bubble.getX()+anchorWidth/2f;anchorY=bubble.getY()+anchorHeight/2f;haveAnchor=anchorWidth>0&&anchorHeight>0;bubble.setVisibility(View.INVISIBLE);}setVisibility(View.VISIBLE);startAdaptive();if(tab==3){ensureMods();startSync();}invalidate();}
     void ensureMods(){if(!modPackages&&!allModRows.isEmpty()&&!modBusy)syncModuleRows();else refreshMods();}
     String offsetKey(){return (modPackages?"package":"module")+(modLayout==1?"VerticalOffset":"HorizontalOffset");}
     void loadModOffset(){modOffset=modLayout==0?0:Math.max(0,prefs.getFloat(offsetKey(),0));}
@@ -261,21 +261,30 @@ public final class LumaUI {
       }catch(Throwable e){modStatus="Settings unavailable in this launcher";announceForAccessibility(modStatus);invalidate();}
     }
     void stopGesture(){modGesture=false;flingVelocity=0;if(modVelocity!=null){modVelocity.recycle();modVelocity=null;}}
-    void close(){if(sampler!=null)sampler.stop();recycleWarp();shown=false;for(PlayField field:playFields)field.pressed=false;stopGesture();saveModOffset();active=-1;removeCallbacks(syncRunnable);invalidate();}
+    void close(){press.cancel();if(sampler!=null)sampler.stop();recycleWarp();shown=false;for(PlayField field:playFields)field.pressed=false;stopGesture();saveModOffset();active=-1;removeCallbacks(syncRunnable);invalidate();}
     void loadColor(int slot){colorSlot=slot;int color=palette[slot];target[0]=Color.red(color)/255f;target[1]=Color.green(color)/255f;target[2]=Color.blue(color)/255f;}
     void recordColor(){palette[colorSlot]=Color.rgb((int)(target[0]*255),(int)(target[1]*255),(int)(target[2]*255));}
-    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putBoolean("glowFollow",glowFollow).putBoolean("adaptiveColor",adaptiveColor).putFloat("glowStrength",target[5]).putInt("buttonReturn",buttonReturn).putInt("buttonSize",buttonSize).putInt("buttonIcon",buttonIcon).apply();if(bubble!=null)bubble.invalidate();}
+    void save(){recordColor();prefs.edit().putInt("accentColor",palette[0]).putInt("panelColor",palette[1]).putInt("effectColor",palette[2]).putFloat("opacity",target[3]).putFloat("motion",target[4]).putInt("motionMode",motionMode).putBoolean("portalTransition",transitionStyle!=0).putInt("transitionStyle",transitionStyle).putInt("depthMode",depthMode).putBoolean("touchRipple",touchRipple).putBoolean("smoothBackground",smoothBackground).putBoolean("glowFollow",glowFollow).putBoolean("adaptiveColor",adaptiveColor).putFloat("glowStrength",target[5]).putInt("buttonReturn",buttonReturn).putInt("buttonSize",buttonSize).putInt("buttonIcon",buttonIcon).putInt("pressStyle",pressStyle).apply();if(bubble!=null)bubble.invalidate();}
     int panelColor(){return adaptiveColor&&adaptiveValid?adaptivePanel:palette[1];}
     int accent(){return adaptiveColor&&adaptiveValid?adaptiveAccent:colorSlot==0?Color.rgb((int)(shownValue[0]*255),(int)(shownValue[1]*255),(int)(shownValue[2]*255)):palette[0];}
-    void startAdaptive(){if(!adaptiveColor||!shown)return;if(sampler==null)sampler=new AdaptiveSampler((Activity)getContext(),this,new AdaptiveSampler.Result(){public void color(int c){if(!shown||!adaptiveColor)return;adaptiveTargetPanel=AdaptiveColor.panel(c);adaptiveTargetAccent=AdaptiveColor.accent(c);if(!adaptiveValid){adaptivePanel=palette[1];adaptiveAccent=palette[0];initParts(adaptivePanelParts,adaptivePanel);initParts(adaptiveAccentParts,adaptiveAccent);}adaptiveValid=true;adaptiveStatus="";invalidate();}public void unavailable(){if(!shown||!adaptiveColor)return;adaptiveValid=false;adaptiveStatus="Game surface unavailable";invalidate();}});sampler.start();}
+    void startAdaptive(){if(!adaptiveColor||!shown)return;if(sampler==null)sampler=new AdaptiveSampler((Activity)getContext(),this,new AdaptiveSampler.Result(){public void colors(int[] pixels){if(!shown||!adaptiveColor)return;int c=AdaptiveColor.average(pixels);adaptiveTargetPanel=AdaptiveColor.panel(c);adaptiveTargetAccent=AdaptiveColor.accent(c);if(!adaptiveValid){adaptivePanel=palette[1];adaptiveAccent=palette[0];initParts(adaptivePanelParts,adaptivePanel);initParts(adaptiveAccentParts,adaptiveAccent);adaptiveGrid.reset(palette[1]);adaptiveBitmap=null;}adaptiveGrid.accept(pixels);adaptiveValid=true;adaptiveStatus="";invalidate();}public void unavailable(){if(!shown||!adaptiveColor)return;adaptiveValid=false;adaptiveStatus="Game surface unavailable";invalidate();}});sampler.start();}
     void initParts(float[] a,int color){a[0]=Color.red(color);a[1]=Color.green(color);a[2]=Color.blue(color);}
     int stepParts(float[] a,int color,float k){int[] b={Color.red(color),Color.green(color),Color.blue(color)};for(int i=0;i<3;i++){a[i]+=(b[i]-a[i])*k;if(Math.abs(a[i]-b[i])<.35f)a[i]=b[i];}return Color.rgb(Math.round(a[0]),Math.round(a[1]),Math.round(a[2]));}
     int alpha(int color,int a){return (color&0xffffff)|(Math.max(0,Math.min(255,a))<<24);}
-    void resetVisuals(){palette[0]=0xff9280ff;palette[1]=0xff12141f;palette[2]=0xff9280ff;loadColor(0);target[3]=.92f;target[4]=.5f;target[5]=.8f;motionMode=1;backgroundBlend.select(1);for(PlayField field:playFields)field.pressed=false;depthMode=2;transitionStyle=2;touchRipple=true;smoothBackground=true;glowFollow=true;adaptiveColor=false;if(sampler!=null)sampler.stop();adaptiveValid=false;buttonReturn=1;buttonSize=1;buttonIcon=0;resetArmedUntil=0;save();resizeBubble(buttonSize);invalidate();}
+    void resetVisuals(){palette[0]=0xff9280ff;palette[1]=0xff12141f;palette[2]=0xff9280ff;loadColor(0);target[3]=.92f;target[4]=.5f;target[5]=.8f;motionMode=1;backgroundBlend.select(1);for(PlayField field:playFields)field.pressed=false;depthMode=2;transitionStyle=2;touchRipple=true;smoothBackground=true;glowFollow=true;adaptiveColor=false;if(sampler!=null)sampler.stop();adaptiveValid=false;buttonReturn=1;buttonSize=1;buttonIcon=0;pressStyle=2;press.cancel();resetArmedUntil=0;save();resizeBubble(buttonSize);invalidate();}
     void round(Canvas c,float l,float t,float r,float b,float radius,int color){
-      if(touchRipple&&shown&&tapAge<1&&tapX>=l&&tapX<=r&&tapY>=t&&tapY<=b&&(r-l)<250*unit&&(b-t)<65*unit){float bump=.055f*(float)Math.sin(Math.PI*tapAge);float dx=(r-l)*bump*.5f,dy=(b-t)*bump*.5f;l-=dx;r+=dx;t-=dy;b+=dy;}
-      p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawRoundRect(new RectF(l,t,r,b),radius,radius,p);}
-    void text(Canvas c,String s,float a,float b,float size,int col,boolean bold){p.setColor(col);p.setStyle(Paint.Style.FILL);p.setTypeface(android.graphics.Typeface.create(bold?"sans-serif-medium":"sans-serif",0));p.setTextAlign(Paint.Align.LEFT);p.setTextSize(size);c.drawText(s,a,b,p);}
+      c.save();if(!suppressPress&&(r-l)<250*unit&&(b-t)<65*unit&&(b-t)>10*unit)pressTransform(c,l,t,r,b);
+      p.setStyle(Paint.Style.FILL);p.setColor(color);c.drawRoundRect(new RectF(l,t,r,b),radius,radius,p);c.restore();}
+    void pressTransform(Canvas c,float l,float t,float r,float b){if(pressStyle!=0&&press.active()&&press.x>=l&&press.x<=r&&press.y>=t&&press.y<=b)c.scale(press.scaleX(pressStyle),press.scaleY(pressStyle),(l+r)*.5f,(t+b)*.5f);}
+    void text(Canvas c,String s,float a,float b,float size,int col,boolean bold){
+      p.setColor(col);p.setStyle(Paint.Style.FILL);p.setTypeface(android.graphics.Typeface.create(bold?"sans-serif-medium":"sans-serif",0));p.setTextAlign(Paint.Align.LEFT);p.setTextSize(size);
+      if(shown&&transitionStyle==3&&scatterProgress<1){int key=s.hashCode()+(int)(a*3+b*5)+scatterSeed;float stage=a<body-10*unit?.04f:(b<y+65*unit?.15f:.30f);
+        int count=s.codePointCount(0,s.length()),visible=TransitionMath.visibleCharacters(count,key,scatterProgress,stage);if(visible<=0)return;
+        float q=TransitionMath.scatterPhase(key,scatterProgress,stage);double direction=key*2.399963;float remain=1-q;
+        c.save();c.translate((float)Math.cos(direction)*18*unit*remain,(float)Math.sin(direction)*18*unit*remain);c.scale(1+.13f*remain,.87f+.13f*q,a,b);
+        c.drawText(s.substring(0,s.offsetByCodePoints(0,visible)),a,b,p);c.restore();
+      }else c.drawText(s,a,b,p);
+    }
     void depthShadow(Canvas c,int ac){
       if(depthMode==0)return;
       int layers=depthMode==2?5:2;
@@ -302,6 +311,7 @@ public final class LumaUI {
       long now=android.os.SystemClock.uptimeMillis();float dt=last==0?.016f:Math.min(.05f,(now-last)/1000f);last=now;
       phaseTime+=dt*(.35f+target[4]*1.3f);float speed=10f+target[4]*14f;float k=1f-(float)Math.exp(-dt*speed);
       if(shown){backgroundBlend.step(dt,target[4]);if(backgroundBlend.weight(1)>.001f||motionMode==1)lava.step(dt*(.5f+target[4]),h>1?Math.max(.3f,(w-side)/h):1.3f);for(int mode=3;mode<=5;mode++)if(backgroundBlend.weight(mode)>.001f||mode==motionMode)playFields[mode-3].step(dt*(.6f+target[4]),mode);}
+      if(shown&&transitionStyle==3&&scatterProgress<1)scatterProgress=Math.min(1,scatterProgress+dt/(1.45f-.5f*target[4]));
       open=spring.step(shown?1f:0f,dt,target[4]);tabMotion+=(navIndex(tab)-tabMotion)*k;modAnim=Math.max(0,modAnim-dt*3.8f);
       categoryMotion+=((modPackages?1f:0f)-categoryMotion)*k;layoutMotion+=(modLayout-layoutMotion)*k;
       if(Math.abs(flingVelocity)>1f&&!modGesture&&shown&&tab==3&&modLayout!=0){float before=modOffset;modOffset=ModLayout.clamp(modOffset+flingVelocity*dt,modLayout,modRows.size(),viewportUnits());
@@ -309,10 +319,11 @@ public final class LumaUI {
       boolean switchesAnimating=false;float mix=1f-(float)Math.exp(-dt*12f);
       for(ModBridge.Row row:modRows){String id=(row.packageMod?"P:":row.source+":")+row.id;Float v=switchValues.get(id);float goal=row.enabled?1f:0f;float value=v==null?goal:v+(goal-v)*mix;if(Math.abs(goal-value)<.005f)value=goal;else switchesAnimating=true;switchValues.put(id,value);}
       if(tapAge<1f)tapAge=Math.min(1f,tapAge+dt*.72f);
-      boolean anim=backgroundBlend.active()||modAnim>0||switchesAnimating||Math.abs(flingVelocity)>1f||Math.abs(categoryMotion-(modPackages?1f:0f))>.002f||Math.abs(layoutMotion-modLayout)>.002f||Math.abs((shown?1:0)-open)>.002f||Math.abs(spring.velocity())>.01f||Math.abs(navIndex(tab)-tabMotion)>.002f||(touchRipple&&tapAge<1f);
+      boolean anim=pressStyle!=0&&press.step(dt);anim|=shown&&transitionStyle==3&&scatterProgress<1;
+      anim|=backgroundBlend.active()||modAnim>0||switchesAnimating||Math.abs(flingVelocity)>1f||Math.abs(categoryMotion-(modPackages?1f:0f))>.002f||Math.abs(layoutMotion-modLayout)>.002f||Math.abs((shown?1:0)-open)>.002f||Math.abs(spring.velocity())>.01f||Math.abs(navIndex(tab)-tabMotion)>.002f||(touchRipple&&tapAge<1f);
       lightX+=(targetLightX-lightX)*k;lightY+=(targetLightY-lightY)*k;
       anim|=depthMode!=0&&(Math.abs(targetLightX-lightX)>.002f||Math.abs(targetLightY-lightY)>.002f);
-      if(adaptiveColor&&adaptiveValid){int nextPanel=stepParts(adaptivePanelParts,adaptiveTargetPanel,Math.min(1,dt*1.8f)),nextAccent=stepParts(adaptiveAccentParts,adaptiveTargetAccent,Math.min(1,dt*1.8f));anim|=nextPanel!=adaptiveTargetPanel||nextAccent!=adaptiveTargetAccent;adaptivePanel=nextPanel;adaptiveAccent=nextAccent;}
+      if(adaptiveColor&&adaptiveValid){int nextPanel=stepParts(adaptivePanelParts,adaptiveTargetPanel,Math.min(1,dt*1.8f)),nextAccent=stepParts(adaptiveAccentParts,adaptiveTargetAccent,Math.min(1,dt*1.8f));anim|=nextPanel!=adaptiveTargetPanel||nextAccent!=adaptiveTargetAccent;adaptivePanel=nextPanel;adaptiveAccent=nextAccent;boolean gridActive=adaptiveGrid.advance(dt);anim|=gridActive;if(gridActive||adaptiveBitmap==null)try{adaptiveBitmap=Bitmap.createBitmap(adaptiveGrid.pixels(),AdaptiveGrid.WIDTH,AdaptiveGrid.HEIGHT,Bitmap.Config.ARGB_8888);}catch(OutOfMemoryError ignored){adaptiveBitmap=null;}}
       for(int i=0;i<6;i++){shownValue[i]+=(target[i]-shownValue[i])*k;anim|=Math.abs(target[i]-shownValue[i])>.002f;}
       if(!shown&&open<.01f){recycleWarp();open=0;spring.reset(0);setVisibility(View.GONE);post(new Runnable(){public void run(){if(panel==Panel.this&&!shown&&getVisibility()==View.GONE)revealBubble(buttonReturn,target[4]);}});return;}
       float W=getWidth(),H=getHeight(),density=getResources().getDisplayMetrics().density;if(W<=0||H<=0)return;unit=TransitionMath.layoutUnit(density,W,H);
@@ -329,7 +340,8 @@ public final class LumaUI {
         p.setStyle(Paint.Style.FILL);
       }
       float liveMix=TransitionMath.snapshotMix(open);
-      boolean warped=transitionStyle==2&&open<1f&&prepareWarp(W,H);
+      // Opening stays on live canvas throughout: no frozen-mesh-to-live handoff at the end.
+      boolean warped=transitionStyle==2&&!shown&&open<1f&&prepareWarp(W,H);
       if(warped){
         if(!snapshotValid){Canvas snapshot=new Canvas(warpBitmap);snapshot.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR);snapshot.scale((float)warpBitmap.getWidth()/W,(float)warpBitmap.getHeight()/H);
           float original=open;try{open=1f;drawPanel(snapshot,W,H,originX,originY,ac,false);}finally{open=original;}snapshotValid=true;warpBitmap.prepareToDraw();}
@@ -359,7 +371,9 @@ public final class LumaUI {
         c.translate(TransitionMath.offset(originX,W/2,open),TransitionMath.offset(originY,H/2,open));c.scale(sx,sy,W/2,H/2);}
       else if(transform)c.scale(.94f+.06f*open,.94f+.06f*open,W/2,H/2);
       depthShadow(c,ac);
-      int bg=(int)((.68f+.31f*shownValue[3])*255*open);round(c,x,y,x+w,y+h,20*unit,Color.argb(bg,Color.red(panelColor()),Color.green(panelColor()),Color.blue(panelColor())));
+      int bg=(int)((.68f+.31f*shownValue[3])*255*open);
+      if(adaptiveColor&&adaptiveValid&&adaptiveBitmap!=null){c.save();Path themeClip=new Path();themeClip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(themeClip);p.setStyle(Paint.Style.FILL);p.setColor(Color.WHITE);p.setFilterBitmap(true);p.setAlpha(bg);c.drawBitmap(adaptiveBitmap,null,new RectF(x,y,x+w,y+h),p);p.setAlpha(255);c.restore();}
+      else round(c,x,y,x+w,y+h,20*unit,Color.argb(bg,Color.red(panelColor()),Color.green(panelColor()),Color.blue(panelColor())));
       depthLight(c,ac);
       c.save();Path backgroundClip=new Path();backgroundClip.addRoundRect(new RectF(x,y,x+w,y+h),20*unit,20*unit,Path.Direction.CW);c.clipPath(backgroundClip);
       for(int mode=1;mode<BackgroundBlend.COUNT;mode++){float weight=backgroundBlend.weight(mode);if(weight<.002f)continue;
@@ -373,8 +387,8 @@ public final class LumaUI {
       text(c,"LumaUI",x+57*unit,y+34*unit,19*unit,alpha(Color.WHITE,(int)(255*open)),true);text(c,"YOUR SPACE",x+57*unit,y+48*unit,8*unit,alpha(0xffa7a8bd,(int)(220*open)),true);
       float menuY=y+83*unit; round(c,x+12*unit,menuY+tabMotion*40*unit,x+side-12*unit,menuY+35*unit+tabMotion*40*unit,10*unit,alpha(ac,(int)(45*open)));
       round(c,x+12*unit,menuY+tabMotion*40*unit+8*unit,x+15*unit,menuY+tabMotion*40*unit+28*unit,2*unit,alpha(ac,(int)(220*open)));
-      String[] tabs={"Mods","Appearance","Motion","Effects","HUD Editor","About","Button"}; for(int i=0;i<7;i++){boolean selected=navTab(i)==tab;int co=selected?0xfff5f4ff:0xff979aaa;c.save();if(transitionStyle==3){float drift=TransitionMath.scatterOffset(i+3+scatterSeed,open);c.translate(drift*36*unit,(1-open)*(i%2==0?-14:14)*unit);c.scale(1+.24f*(1-open),.85f+.15f*open,x+24*unit,menuY+(i*40+24)*unit);}text(c,tabs[i],x+24*unit,menuY+(i*40+24)*unit,13*unit,alpha(co,(int)(255*open)),selected);c.restore();}
-      text(c,"GUI ONLY  •  v1.3.0",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
+      String[] tabs={"Mods","Appearance","Motion","Effects","HUD Editor","About","Button"}; for(int i=0;i<7;i++){boolean selected=navTab(i)==tab;int co=selected?0xfff5f4ff:0xff979aaa;c.save();scatterInto(c,i+3,x+24*unit,menuY+(i*40+24)*unit,.03f);text(c,tabs[i],x+24*unit,menuY+(i*40+24)*unit,13*unit,alpha(co,(int)(255*open)),selected);c.restore();}
+      text(c,"GUI ONLY  •  v1.4.0",x+20*unit,y+h-20*unit,9*unit,alpha(0xff85899e,(int)(220*open)),false);
       p.setColor(alpha(0xff6f7080,(int)(65*open)));p.setStrokeWidth(unit);c.drawLine(body,y+18*unit,body,y+h-18*unit,p);
       text(c,tab==0?"Appearance":tab==1?"Motion":tab==2?"Effects":tab==3?"Mods":tab==4?"About":tab==5?"Button":"HUD Editor",body+24*unit,y+38*unit,21*unit,alpha(Color.WHITE,(int)(255*open)),true);
       round(c,x+w-48*unit,y+14*unit,x+w-15*unit,y+47*unit,10*unit,alpha(0xff777b94,(int)(38*open)));
@@ -382,7 +396,7 @@ public final class LumaUI {
       float transition=1f-Math.min(.75f,Math.abs(navIndex(tab)-tabMotion)*.65f);
       if(transition<.995f)c.saveLayerAlpha(body,y,x+w,y+h,(int)(255*transition),Canvas.ALL_SAVE_FLAG);else c.save();
       c.translate((tabMotion-navIndex(tab))*18*unit,0);
-      if(transitionStyle==3){float drift=TransitionMath.scatterOffset(tab+11+scatterSeed,open);c.translate(drift*38*unit,(1-open)*20*unit*(tab%2==0?1:-1));c.scale(1+.14f*(1-open),.88f+.12f*open,body,y+h*.5f);}
+      scatterInto(c,tab+11,body,y+h*.5f,.18f);
       if(tab==0){text(c,"MAKE IT YOURS",body+24*unit,y+61*unit,9*unit,alpha(ac,(int)(255*open)),true);
         float segLeft=body+24*unit,segW=(x+w-32*unit-segLeft)/3f;
         String[] groups={"Accent","Panel","Effects"};
@@ -442,7 +456,9 @@ public final class LumaUI {
       final Panel self=this;hudEditor=HudEditor.start((Activity)getContext(),root,accent(),new Runnable(){public void run(){hudEditor=null;if(root!=null&&bubble!=null)revealBubble(self.buttonReturn,self.target[4]);}});
       if(sampler!=null)sampler.stop();recycleWarp();shown=false;spring.reset(0);open=0;stopGesture();saveModOffset();removeCallbacks(syncRunnable);setVisibility(View.GONE);if(bubble!=null){bubble.setAlpha(1);bubble.setVisibility(View.VISIBLE);}hudStatus="";
     }catch(Exception e){hudStatus="HUD editor unavailable in this launcher";announceForAccessibility(hudStatus);invalidate();}}
-    void scatterItem(Canvas c,int key,float cx,float cy){c.save();if(transitionStyle==3){float q=TransitionMath.scatterOffset(key+scatterSeed,open);c.translate(q*32*unit,(1-open)*((key%2==0)?-20:20)*unit);c.scale(1+.18f*(1-open),.86f+.14f*open,cx,cy);}}
+    void scatterInto(Canvas c,int id,float cx,float cy,float stage){if(transitionStyle!=3)return;int key=id+scatterSeed;float phase=TransitionMath.scatterPhase(key,shown?scatterProgress:open,stage),remain=1-phase;double direction=key*2.399963;
+      float dx=(float)Math.cos(direction),dy=(float)Math.sin(direction);c.translate(dx*48*unit*remain,dy*38*unit*remain);c.rotate(dx*7*remain,cx,cy);c.scale(1+.30f*remain,.72f+.28f*phase,cx,cy);}
+    void scatterItem(Canvas c,int key,float cx,float cy){c.save();scatterInto(c,key,cx,cy,.28f);}
     void drawButtonSettings(Canvas c,int ac){
       float left=body+24*unit,right=x+w-32*unit;
       text(c,"MAKE AN ENTRANCE",left,y+62*unit,9*unit,alpha(ac,(int)(255*open)),true);
@@ -457,7 +473,8 @@ public final class LumaUI {
       text(c,"Button icon",left,y+284*unit,13*unit,alpha(Color.WHITE,(int)(255*open)),true);
       String[] icons={"Luma L","Star","Diamond"};
       for(int i=0;i<3;i++){float a=left+i*third;scatterItem(c,i+95,a,y+312*unit);round(c,a,y+295*unit,a+third-5*unit,y+329*unit,9*unit,alpha(i==buttonIcon?ac:0xff505365,(int)((i==buttonIcon?105:50)*open)));text(c,icons[i],a+9*unit,y+317*unit,10*unit,alpha(Color.WHITE,(int)(245*open)),i==buttonIcon);c.restore();}
-      text(c,"Close the menu to see your button animation.",left,y+365*unit,10*unit,alpha(0xffaeb0c5,(int)(255*open)),false);
+      text(c,"Button press feedback",left,y+354*unit,11*unit,alpha(Color.WHITE,(int)(255*open)),true);
+      String[] pressOptions={"Off","Soft","Water"};for(int i=0;i<3;i++){float a=left+i*third;scatterItem(c,i+105,a,y+379*unit);round(c,a,y+363*unit,a+third-5*unit,y+395*unit,9*unit,alpha(i==pressStyle?ac:0xff505365,(int)((i==pressStyle?105:50)*open)));text(c,pressOptions[i],a+9*unit,y+384*unit,10*unit,alpha(Color.WHITE,(int)(245*open)),i==pressStyle);c.restore();}
     }
     void drawBackground(Canvas c,int mode,float fade){
         int effect=adaptiveColor&&adaptiveValid?adaptiveAccent:palette[2]; float seconds=phaseTime;
@@ -506,8 +523,9 @@ public final class LumaUI {
     float switchValue(ModBridge.Row row){Float v=switchValues.get((row.packageMod?"P:":row.source+":")+row.id);return v==null?(row.enabled?1:0):v;}
     int mixColor(int a,int b,float t){return Color.rgb((int)(Color.red(a)+(Color.red(b)-Color.red(a))*t),(int)(Color.green(a)+(Color.green(b)-Color.green(a))*t),(int)(Color.blue(a)+(Color.blue(b)-Color.blue(a))*t));}
     void drawToggle(Canvas c,float left,float top,float right,float bottom,ModBridge.Row row,int ac){
+      c.save();pressTransform(c,left,top,right,bottom);suppressPress=true;
       float value=switchValue(row);round(c,left,top,right,bottom,9*unit,alpha(mixColor(0xff606473,ac,value),(int)(175*open)));
-      p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xfffafaff,(int)(255*open)));float r=(bottom-top)*.31f;c.drawCircle(left+r+4*unit+value*(right-left-2*r-8*unit),(top+bottom)/2,r,p);
+      p.setStyle(Paint.Style.FILL);p.setColor(alpha(0xfffafaff,(int)(255*open)));float r=(bottom-top)*.31f;c.drawCircle(left+r+4*unit+value*(right-left-2*r-8*unit),(top+bottom)/2,r,p);suppressPress=false;c.restore();
     }
     void drawMods(Canvas c,int ac){
       float left=body+24*unit,right=x+w-32*unit,half=(right-left)/2f;
@@ -533,7 +551,7 @@ public final class LumaUI {
         if(modLayout==ModLayout.HORIZONTAL){l=left+(i*ModLayout.CARD-modOffset)*unit;r=l+200*unit;t=top;}
         float b=t+(modLayout==ModLayout.HORIZONTAL?168:40)*unit;
         if((modLayout==ModLayout.HORIZONTAL&&(r<left||l>right))||(modLayout!=ModLayout.HORIZONTAL&&(b<top||t>bottom)))continue;
-        c.save();if(transitionStyle==3){float q=TransitionMath.scatterOffset(i+21+scatterSeed,open);c.translate(q*38*unit,(1-open)*(i%2==0?-24:24)*unit);c.scale(1+.22f*(1-open),.82f+.18f*open,l,t);}
+        c.save();scatterInto(c,i+21,l,t,.30f);
         float state=switchValue(row);round(c,l,t,r,b,10*unit,alpha(mixColor(0xff242632,0xff35304d,state),(int)(195*open)));
         round(c,l+6*unit,t+7*unit,l+9*unit,Math.min(b-7*unit,t+33*unit),2*unit,alpha(mixColor(0xff777b8b,ac,state),(int)(230*open)));
         c.save();c.clipRect(l+12*unit,t,modLayout==2?r-10*unit:r-(row.hasSettings?157:114)*unit,b);
@@ -572,7 +590,10 @@ public final class LumaUI {
     }
     public boolean onTouchEvent(MotionEvent e){float px=e.getX(),py=e.getY();int act=e.getActionMasked();float left=body+24*unit,right=x+w-32*unit;
       if(!shown)return false;
-      if(open<.98f)return true;
+      if(open<.98f||(transitionStyle==3&&scatterProgress<.98f))return true;
+      if(pressStyle!=0){if(act==MotionEvent.ACTION_DOWN&&px>=x&&px<=x+w&&py>=y&&py<=y+h){press.down(px,py);invalidate();}
+        else if(act==MotionEvent.ACTION_MOVE&&press.held&&((px-press.x)*(px-press.x)+(py-press.y)*(py-press.y)>100*unit*unit)){press.cancel();invalidate();}
+        else if(act==MotionEvent.ACTION_UP){press.release();invalidate();}else if(act==MotionEvent.ACTION_CANCEL){press.cancel();invalidate();}}
       if(motionMode>=3){PlayField playField=playFields[motionMode-3];boolean inside=px>=body&&px<=x+w&&py>=y&&py<=y+h;
         if((act==MotionEvent.ACTION_DOWN&&inside)||(act==MotionEvent.ACTION_MOVE&&playField.pressed)){
           float bw=Math.max(1,x+w-body);playField.pointer((px-body)/bw,(py-y)/Math.max(1,h),true,motionMode,bw/Math.max(1,h));invalidate();
@@ -606,6 +627,7 @@ public final class LumaUI {
         if(tab==5&&px>=left&&px<=right){
           if(py>=y+106*unit&&py<=y+140*unit){buttonReturn=Math.max(0,Math.min(3,(int)((px-left)/((right-left)/4))));save();invalidate();return true;}
           if(py>=y+211*unit&&py<=y+245*unit){int n=Math.max(0,Math.min(2,(int)((px-left)/((right-left)/3))));if(n!=buttonSize){buttonSize=n;resizeBubble(n);}save();invalidate();return true;}
+          if(py>=y+363*unit&&py<=y+395*unit){pressStyle=Math.max(0,Math.min(2,(int)((px-left)/((right-left)/3))));if(pressStyle==0)press.cancel();save();invalidate();return true;}
           if(py>=y+295*unit&&py<=y+329*unit){buttonIcon=Math.max(0,Math.min(2,(int)((px-left)/((right-left)/3))));save();invalidate();return true;}
         }
         if(tab==1&&px>=left&&px<=right&&py>=y+232*unit&&py<=y+283*unit){int row=(int)((py-y-232*unit)/(27*unit));float within=(py-y-232*unit)-row*27*unit;if(row<2&&within<=24*unit){int selected=Math.min(2,(int)((px-left)/((right-left)/3)))+row*3;if(selected!=motionMode){if(motionMode>=3)playFields[motionMode-3].pressed=false;motionMode=selected;backgroundBlend.select(selected);}save();invalidate();}return true;}

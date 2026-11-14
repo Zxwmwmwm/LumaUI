@@ -8,7 +8,9 @@ final class TransitionMath {
     if(density<=0f||width<=0f||height<=0f)return .1f;
     return Math.max(.01f,Math.min(density,Math.min(width/700f,height/420f)));
   }
-  static float scatterOffset(int key,float progress){float p=clamp(progress);float delayed=clamp((p-(key%3)*.045f)/.86f);float smooth=delayed*delayed*(3-2*delayed);return (1-smooth)*(float)Math.sin(key*2.399963f);}
+  static float scatterPhase(int key,float progress,float stage){int hash=key*1103515245+12345;float jitter=((hash>>>16)&255)/255f*.09f;float delay=Math.min(.55f,Math.max(0,stage)+jitter);float p=clamp((progress-delay)/(1-delay));return p*p*(3-2*p);}
+  static float scatterOffset(int key,float progress){return (1-scatterPhase(key,progress,.08f))*(float)Math.sin(key*2.399963f);}
+  static int visibleCharacters(int count,int key,float progress,float stage){if(count<=0)return 0;int hash=key*1103515245+12345;float jitter=((hash>>>16)&255)/255f*.06f;float delay=Math.min(.6f,stage+jitter);float phase=clamp((progress-delay)/(.88f-delay));return Math.min(count,Math.max(0,(int)Math.floor(count*phase)));}
   static float snapshotMix(float progress){float t=clamp((progress-.88f)/.12f);return t*t*(3f-2f*t);}
   static float offset(float origin, float center, float progress) { return (origin-center)*(1f-clamp(progress)); }
   static float startScale(float bubbleWidth,float bubbleHeight,float menuWidth,float menuHeight) {
@@ -17,8 +19,8 @@ final class TransitionMath {
   }
   static float scale(float start,float progress) {float p=clamp(progress),s=clamp(start);return s+(1f-s)*p;}
   static float elasticScale(float start,float progress,boolean stretchedAxis) {
-    float p=clamp(progress), envelope=4f*p*(1f-p);
-    return scale(start,p)*(stretchedAxis?1f+.42f*envelope:1f-.18f*envelope);
+    float p=clamp(progress);float curved=p+(stretchedAxis?.30f:-.30f)*p*(1f-p);
+    return scale(start,curved);
   }
   // Radial, non-affine funnel: the side nearest the button is pulled in
   // faster than the far edge. The small twist adds a black-hole bend.

@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 : "${R8_JAR:?Set R8_JAR to an R8 jar containing D8}"
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/classes" "$work/dex" artifacts
-javac -encoding UTF-8 -source 8 -target 8 -classpath "$ANDROID_JAR" -d "$work/classes" src/LumaUI.java src/HudEditor.java src/AdaptiveSampler.java src/AdaptiveColor.java src/TransitionMath.java src/BackgroundBlend.java src/ButtonMotion.java src/ModBridge.java src/ModSearch.java src/PlayField.java src/LavaField.java src/ModPages.java src/ModLayout.java src/SettingsMotion.java src/SettingsSheet.java src/SearchSheet.java
+javac -encoding UTF-8 -source 8 -target 8 -classpath "$ANDROID_JAR" -d "$work/classes" src/LumaUI.java src/HudEditor.java src/AdaptiveSampler.java src/AdaptiveColor.java src/AdaptiveGrid.java src/TransitionMath.java src/BackgroundBlend.java src/ButtonMotion.java src/PressMotion.java src/ModBridge.java src/ModSearch.java src/PlayField.java src/LavaField.java src/ModPages.java src/ModLayout.java src/SettingsMotion.java src/SettingsSheet.java src/SearchSheet.java
 (cd "$work/classes" && python3 -m zipfile -c "$work/ui.jar" luma)
 java -cp "$R8_JAR" com.android.tools.r8.D8 --min-api 26 --lib "$ANDROID_JAR" --output "$work/dex" "$work/ui.jar"
 python3 - "$work/dex/classes.dex" "$work/dex.cpp" <<'PY'
